@@ -24,8 +24,8 @@ pub enum AvroType {
     String,
 
     // Logical types on top of primitives.
-    Date,             // int + logicalType "date"
-    TimestampMillis,  // long + logicalType "timestamp-millis"
+    Date,            // int + logicalType "date"
+    TimestampMillis, // long + logicalType "timestamp-millis"
     Decimal { precision: u32, scale: u32 },
 
     // Complex

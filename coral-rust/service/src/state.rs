@@ -37,9 +37,6 @@ impl AppState {
     }
 
     pub fn get(&self, id: &str) -> Option<GraphPayload> {
-        self.graphs
-            .lock()
-            .ok()
-            .and_then(|g| g.get(id).cloned())
+        self.graphs.lock().ok().and_then(|g| g.get(id).cloned())
     }
 }

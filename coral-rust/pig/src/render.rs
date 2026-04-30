@@ -21,7 +21,11 @@ pub fn to_pig_latin(sql: &str) -> Result<String> {
     let query = match stmt {
         Statement::Query(q) => q,
         Statement::CreateView { query, .. } => query,
-        _ => return Err(PigError::Unsupported("expected SELECT or CREATE VIEW".into())),
+        _ => {
+            return Err(PigError::Unsupported(
+                "expected SELECT or CREATE VIEW".into(),
+            ))
+        }
     };
     let select = unwrap_select(query)?;
     let mut ctx = PigCtx::default();
@@ -73,7 +77,10 @@ fn render_query(q: &Query, sel: &Select, ctx: &mut PigCtx) {
     let mut current = from_alias;
     if let Some(predicate) = &sel.selection {
         let next = ctx.alloc();
-        ctx.emit(format!("{next} = FILTER {current} BY ({});", render_expr(predicate)));
+        ctx.emit(format!(
+            "{next} = FILTER {current} BY ({});",
+            render_expr(predicate)
+        ));
         current = next;
     }
 
@@ -97,20 +104,27 @@ fn render_query(q: &Query, sel: &Select, ctx: &mut PigCtx) {
         // Projection → FOREACH t2 GENERATE FLATTEN(group) AS (keys), AGG(...) AS name
         let parts = render_group_projection(&sel.projection, &input_alias, &sel.group_by);
         let proj_alias = ctx.alloc();
-        ctx.emit(format!("{proj_alias} = FOREACH {current} GENERATE {parts};"));
+        ctx.emit(format!(
+            "{proj_alias} = FOREACH {current} GENERATE {parts};"
+        ));
         current = proj_alias;
     } else {
         // Plain SELECT cols
         let parts = render_simple_projection(&sel.projection, &current);
         let proj_alias = ctx.alloc();
-        ctx.emit(format!("{proj_alias} = FOREACH {current} GENERATE {parts};"));
+        ctx.emit(format!(
+            "{proj_alias} = FOREACH {current} GENERATE {parts};"
+        ));
         current = proj_alias;
     }
 
     // 4. HAVING → trailing FILTER.
     if let Some(having) = &sel.having {
         let next = ctx.alloc();
-        ctx.emit(format!("{next} = FILTER {current} BY ({});", render_expr(having)));
+        ctx.emit(format!(
+            "{next} = FILTER {current} BY ({});",
+            render_expr(having)
+        ));
         current = next;
     }
 
@@ -173,9 +187,7 @@ fn render_table_factor(f: &TableFactor, ctx: &mut PigCtx) -> String {
         TableFactor::Table { name, .. } => {
             let alias = ctx.alloc();
             let path = path_for_table(name);
-            ctx.emit(format!(
-                "{alias} = LOAD '{path}' USING PigStorage();"
-            ));
+            ctx.emit(format!("{alias} = LOAD '{path}' USING PigStorage();"));
             alias
         }
         TableFactor::Derived { subquery, .. } => {
@@ -242,7 +254,12 @@ fn render_join(lhs: &str, join: &Join, ctx: &mut PigCtx) -> String {
 
 fn split_join_keys(e: &Expr) -> Option<(String, String)> {
     // Expect `a.x = b.y` — extract the two sides.
-    if let Expr::BinaryOp { left, op: BinaryOperator::Eq, right } = e {
+    if let Expr::BinaryOp {
+        left,
+        op: BinaryOperator::Eq,
+        right,
+    } = e
+    {
         return Some((
             strip_qualifier(&render_expr(left)),
             strip_qualifier(&render_expr(right)),
@@ -285,18 +302,17 @@ fn render_simple_projection(items: &[SelectItem], _from_alias: &str) -> String {
 
 fn render_group_projection(items: &[SelectItem], src: &str, group_by: &GroupByExpr) -> String {
     let key_names: Vec<String> = match group_by {
-        GroupByExpr::Expressions(es, _) => {
-            es.iter().map(|e| strip_qualifier(&render_expr(e))).collect()
-        }
+        GroupByExpr::Expressions(es, _) => es
+            .iter()
+            .map(|e| strip_qualifier(&render_expr(e)))
+            .collect(),
         _ => vec![],
     };
     let mut parts = Vec::with_capacity(items.len());
     for item in items {
         let (expr, alias) = match item {
             SelectItem::UnnamedExpr(e) => (e.clone(), None),
-            SelectItem::ExprWithAlias { expr, alias } => {
-                (expr.clone(), Some(alias.value.clone()))
-            }
+            SelectItem::ExprWithAlias { expr, alias } => (expr.clone(), Some(alias.value.clone())),
             SelectItem::Wildcard(_) => {
                 parts.push("*".to_string());
                 continue;

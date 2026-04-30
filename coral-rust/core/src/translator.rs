@@ -8,12 +8,18 @@
 //! catalog resolution step (the Rust port is pure text->text; we don't
 //! need schemas for translation-only use cases).
 
-use sqlparser::ast::Statement;
+use sqlparser::ast::{Expr, Function, Statement, Visit, Visitor};
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
+use std::collections::BTreeSet;
+use std::ops::ControlFlow;
 
 use crate::catalog::{validate_against, Catalog, ValidationIssue};
 use crate::error::Result;
+use crate::format::{
+    add_default_aliases, drop_as_in_from, pretty_print, qualify_with_default_db,
+    quote_idents_in_from,
+};
 use crate::preprocess::preprocess;
 use crate::rewrite::apply_all_for_target;
 use crate::target::Target;
@@ -47,6 +53,33 @@ pub fn translate_to_trino(gaussdb_sql: &str) -> Result<String> {
 /// Target-aware translation entry point used by both [`translate`] and
 /// [`translate_to_trino`].
 pub fn translate_to(sql: &str, target: Target) -> Result<String> {
+    translate_to_with(sql, target, /* pretty */ false)
+}
+
+/// Return function names that are not present in Coral's known function registry.
+pub fn unknown_functions(sql: &str) -> Result<Vec<String>> {
+    let preprocessed = preprocess(sql);
+    let dialect = PostgreSqlDialect {};
+    let statements = Parser::parse_sql(&dialect, &preprocessed)?;
+    let mut collector = UnknownFunctionCollector {
+        names: BTreeSet::new(),
+    };
+    let _ = statements.visit(&mut collector);
+    Ok(collector.names.into_iter().collect())
+}
+
+/// Target-aware translator with an explicit pretty-print switch.
+///
+/// When `pretty = true` the renderer mirrors Java Coral's Calcite
+/// pretty-printer: prepends `default.` to bare table names,
+/// auto-aliases every `FROM table`, breaks top-level SELECT clauses
+/// onto their own lines, and (for Trino) wraps identifiers in double
+/// quotes. Spark output omits the `AS` keyword between a table and
+/// its alias (`FROM default.t t`), matching Java's Spark dialect.
+/// When `pretty = false` (the default for `translate()` /
+/// `translate_to()`) the output stays compact — this preserves the
+/// golden test suite and is friendlier for programmatic consumers.
+pub fn translate_to_with(sql: &str, target: Target, pretty: bool) -> Result<String> {
     let preprocessed = preprocess(sql);
     let dialect = PostgreSqlDialect {};
     let mut statements = Parser::parse_sql(&dialect, &preprocessed)?;
@@ -57,9 +90,25 @@ pub fn translate_to(sql: &str, target: Target) -> Result<String> {
 
     for stmt in statements.iter_mut() {
         apply_all_for_target(stmt, target);
+        if pretty {
+            qualify_with_default_db(stmt, "default");
+            add_default_aliases(stmt);
+        }
     }
 
-    Ok(render(&statements))
+    let raw = render_with(&statements, pretty);
+    if !pretty {
+        return Ok(raw);
+    }
+
+    // Per-target final formatting. Java's output:
+    //   Spark: FROM default.users users        (no AS, no quotes)
+    //   Trino: FROM "default"."users" AS "users"  (quotes + AS)
+    let final_text = match target {
+        Target::Spark => drop_as_in_from(&raw),
+        Target::Trino => quote_idents_in_from(&raw),
+    };
+    Ok(final_text)
 }
 
 /// Translate multiple statements (separated by `;`) in one pass to Spark SQL.
@@ -83,9 +132,51 @@ pub fn translate_all_to(sql: &str, target: Target) -> Result<Vec<String>> {
 }
 
 fn render(statements: &[Statement]) -> String {
+    render_with(statements, /* pretty */ false)
+}
+
+struct UnknownFunctionCollector {
+    names: BTreeSet<String>,
+}
+
+impl Visitor for UnknownFunctionCollector {
+    type Break = std::convert::Infallible;
+
+    fn post_visit_expr(&mut self, expr: &Expr) -> ControlFlow<Self::Break> {
+        if let Expr::Function(f) = expr {
+            let name = function_name_lower(f);
+            if !name.is_empty() && crate::function_catalog::lookup(&name).is_none() {
+                self.names.insert(name);
+            }
+        }
+        ControlFlow::Continue(())
+    }
+}
+
+fn function_name_lower(f: &Function) -> String {
+    f.name
+        .0
+        .last()
+        .map(|i| i.value.to_lowercase())
+        .unwrap_or_default()
+}
+
+/// Shared renderer used by both the compact and pretty-printed paths.
+/// `pretty = false` matches sqlparser's default `Display` output and
+/// keeps golden tests stable. `pretty = true` runs every statement
+/// through [`format::pretty_print`] to land on Calcite-style clause
+/// boundaries (what Java Coral emits).
+fn render_with(statements: &[Statement], pretty: bool) -> String {
     statements
         .iter()
-        .map(|s| s.to_string())
+        .map(|s| {
+            let raw = s.to_string();
+            if pretty {
+                pretty_print(&raw)
+            } else {
+                raw
+            }
+        })
         .collect::<Vec<_>>()
         .join(";\n")
 }

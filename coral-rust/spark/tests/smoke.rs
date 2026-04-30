@@ -4,15 +4,17 @@
 // End-to-end tests for coral-spark.
 
 use coral_core::InMemoryCatalog;
-use coral_spark::{
-    analyze_plan, classify_predicate, prepare_view, PredicateClass,
-};
+use coral_spark::{analyze_plan, classify_predicate, prepare_view, PredicateClass};
 
 // ---------- prepare_view (session-free subset of coral-spark-catalog) ----------
 
 fn employees_catalog() -> InMemoryCatalog {
     InMemoryCatalog::from_pairs(&[
-        ("hr", "employees", &["id|BIGINT", "name|VARCHAR", "salary|DOUBLE"]),
+        (
+            "hr",
+            "employees",
+            &["id|BIGINT", "name|VARCHAR", "salary|DOUBLE"],
+        ),
         ("hr", "departments", &["id|INT", "name|VARCHAR"]),
     ])
 }
@@ -29,8 +31,16 @@ fn prepare_view_emits_spark_sql_and_avro() {
     assert_eq!(v.name, "vw");
     assert!(v.spark_sql.contains("COALESCE"), "{}", v.spark_sql);
     assert!(!v.spark_sql.contains("NVL("), "{}", v.spark_sql);
-    assert!(v.avro_schema.contains("\"type\": \"record\""), "{}", v.avro_schema);
-    assert!(v.avro_schema.contains("\"name\": \"vw\""), "{}", v.avro_schema);
+    assert!(
+        v.avro_schema.contains("\"type\": \"record\""),
+        "{}",
+        v.avro_schema
+    );
+    assert!(
+        v.avro_schema.contains("\"name\": \"vw\""),
+        "{}",
+        v.avro_schema
+    );
 }
 
 #[test]
@@ -64,7 +74,10 @@ fn prepare_view_accepts_bare_select() {
 fn simple_equality_is_simple() {
     assert_eq!(classify_predicate("id = 1"), PredicateClass::Simple);
     assert_eq!(classify_predicate("x > 10"), PredicateClass::Simple);
-    assert_eq!(classify_predicate("x <= 10 AND y > 5"), PredicateClass::Simple);
+    assert_eq!(
+        classify_predicate("x <= 10 AND y > 5"),
+        PredicateClass::Simple
+    );
     assert_eq!(
         classify_predicate("dept IN ('eng', 'sales')"),
         PredicateClass::Simple

@@ -1,27 +1,24 @@
-# Contribution Agreement
+# Contributing
 
-As a contributor, you represent that the code you submit is your
-original work or that of your employer (in which case you represent
-you have the right to bind your employer). By submitting code, you
-(and, if applicable, your employer) are licensing the submitted code
-to LinkedIn and the open source community subject to the BSD 2-Clause
-license.
+This branch is Rust-first. The legacy Java / Gradle backend has been removed.
 
-# Responsible Disclosure of Security Vulnerabilities
+Before submitting changes, run the relevant checks:
 
-Please do not file reports on Github for security issues. Please
-review the guidelines on at (link to more info). Reports should be
-encrypted using PGP (link to PGP key) and sent to
-security@linkedin.com preferably with the title "Github
-linkedin/coral - <short summary>".
+## Rust
 
-# Tips for Getting Your Pull Request Accepted
+```bash
+cd coral-rust
+cargo fmt --all
+cargo clippy --all-targets --workspace -- -D warnings
+cargo test --workspace --all-targets
+```
 
-1. Make sure all new features are tested and the tests pass.
-2. Make sure that the command `./gradlew clean build` passes. Resolve
-   any formatting errors by running `./gradlew spotlessApply`.
-3. Bug fixes must include a test case demonstrating the error that it
-   fixes.
-4. Open an issue first and seek advice for your change before
-   submitting a pull request. Large features which have never been
-   discussed are unlikely to be accepted.
+## Frontend
+
+```bash
+cd coral-service/frontend
+npm run lint
+npm run build
+```
+
+Bug fixes should include a regression test when practical. Feature changes should update the relevant README or module documentation.

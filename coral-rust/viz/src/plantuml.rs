@@ -24,9 +24,7 @@ fn write_node(node: &Node, counter: &mut u32, parent: Option<u32>, out: &mut Str
     *counter += 1;
     let color = kind_color(node.kind);
     let label = escape(&node.label);
-    out.push_str(&format!(
-        "rectangle \"{label}\" as n{id} {color}\n"
-    ));
+    out.push_str(&format!("rectangle \"{label}\" as n{id} {color}\n"));
     if let Some(p) = parent {
         out.push_str(&format!("n{p} --> n{id}\n"));
     }

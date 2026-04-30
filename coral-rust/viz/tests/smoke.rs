@@ -27,11 +27,7 @@ fn dot_plain_select_has_select_and_from() {
 
 #[test]
 fn dot_join_exposes_table_and_join_nodes() {
-    let dot = render(
-        "SELECT a.id FROM a JOIN b ON a.id = b.id",
-        Format::Dot,
-    )
-    .unwrap();
+    let dot = render("SELECT a.id FROM a JOIN b ON a.id = b.id", Format::Dot).unwrap();
     assert!(has_substring(&dot, "a"), "{dot}");
     assert!(has_substring(&dot, "b"), "{dot}");
     assert!(has_substring(&dot, "Inner"), "{dot}");
@@ -63,11 +59,7 @@ fn dot_escapes_quotes_in_labels() {
 
 #[test]
 fn dot_cte_exposes_with_node() {
-    let dot = render(
-        "WITH x AS (SELECT a FROM t) SELECT a FROM x",
-        Format::Dot,
-    )
-    .unwrap();
+    let dot = render("WITH x AS (SELECT a FROM t) SELECT a FROM x", Format::Dot).unwrap();
     assert!(has_substring(&dot, "CTE"), "{dot}");
     assert!(has_substring(&dot, "WITH"), "{dot}");
 }
@@ -106,11 +98,8 @@ fn walker_tree_structure_is_reasonable() {
     // shape the renderers print.
     use sqlparser::dialect::PostgreSqlDialect;
     use sqlparser::parser::Parser;
-    let stmts = Parser::parse_sql(
-        &PostgreSqlDialect {},
-        "SELECT a, b FROM t WHERE id > 10",
-    )
-    .unwrap();
+    let stmts =
+        Parser::parse_sql(&PostgreSqlDialect {}, "SELECT a, b FROM t WHERE id > 10").unwrap();
     let root: Node = coral_viz::walker::walk_statement(&stmts[0]);
     fn find_kind(n: &Node, k: NodeKind) -> Option<&Node> {
         if n.kind == k {

@@ -1,1 +1,0 @@
-select `timezone_hour`(`at_timezone`(timestamp '2001-08-22 03:04:05.3', 'asia/oral')), `timezone_minute`(`at_timezone`(timestamp '2001-08-22 03:04:05.3', 'asia/oral'))

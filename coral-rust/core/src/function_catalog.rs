@@ -201,6 +201,12 @@ const ENTRIES: &[FunctionEntry] = &[
     e("format_number", Passthrough, String, "Spark-native"),
     e("initcap", Passthrough, String, "Spark-native"),
     e("instr", Passthrough, String, "Spark-native"),
+    e(
+        "strpos",
+        Disposition::Rename("INSTR"),
+        String,
+        "GaussDB/PG/Trino strpos(s, p) -> Spark INSTR(s, p) (same arg order)",
+    ),
     e("length", Passthrough, String, "Spark-native"),
     e("levenshtein", Passthrough, String, "Spark-native"),
     e("locate", Passthrough, String, "Spark-native"),
@@ -471,7 +477,6 @@ const ENTRIES: &[FunctionEntry] = &[
         Misc,
         "LinkedIn-internal UDF",
     ),
-
     // ============================================================
     // Stage I additions — Hive built-ins that were in
     // StaticHiveFunctionRegistry but missed by the initial port.
@@ -491,7 +496,12 @@ const ENTRIES: &[FunctionEntry] = &[
         Conditional,
         "Spark-native (WHEN branch of CASE)",
     ),
-    e("in", Passthrough, Conditional, "Spark-native (IN predicate)"),
+    e(
+        "in",
+        Passthrough,
+        Conditional,
+        "Spark-native (IN predicate)",
+    ),
     e(
         "between",
         Passthrough,
@@ -508,9 +518,18 @@ const ENTRIES: &[FunctionEntry] = &[
     e("isnotnull", Passthrough, Null, "Spark-native"),
     // Hive emits these as internal tokens in some versions; treat same as
     // IS NULL / IS NOT NULL pass-throughs.
-    e("tok_isnull", Passthrough, Null, "Hive internal token, Spark-compatible"),
-    e("tok_isnotnull", Passthrough, Null, "Hive internal token, Spark-compatible"),
-
+    e(
+        "tok_isnull",
+        Passthrough,
+        Null,
+        "Hive internal token, Spark-compatible",
+    ),
+    e(
+        "tok_isnotnull",
+        Passthrough,
+        Null,
+        "Hive internal token, Spark-compatible",
+    ),
     // Window-function missing names.
     e("cume_dist", Passthrough, Window, "Spark-native"),
     e("percent_rank", Passthrough, Window, "Spark-native"),
@@ -519,21 +538,33 @@ const ENTRIES: &[FunctionEntry] = &[
     e("nth_value", Passthrough, Window, "Spark-native"),
     e("lag", Passthrough, Window, "Spark-native"),
     e("lead", Passthrough, Window, "Spark-native"),
-
     // Variance / stddev family.
-    e("variance", Passthrough, Aggregate, "Spark-native alias of var_samp"),
+    e(
+        "variance",
+        Passthrough,
+        Aggregate,
+        "Spark-native alias of var_samp",
+    ),
     e("var_pop", Passthrough, Aggregate, "Spark-native"),
     e("var_samp", Passthrough, Aggregate, "Spark-native"),
-    e("stddev", Passthrough, Aggregate, "Spark-native alias of stddev_samp"),
+    e(
+        "stddev",
+        Passthrough,
+        Aggregate,
+        "Spark-native alias of stddev_samp",
+    ),
     e("stddev_pop", Passthrough, Aggregate, "Spark-native"),
     e("stddev_samp", Passthrough, Aggregate, "Spark-native"),
-
     // String / regex built-ins that were missing.
     e("replace", Passthrough, String, "Spark-native"),
-    e("translate3", Passthrough, String, "Hive 3-arg TRANSLATE, Spark-compatible"),
+    e(
+        "translate3",
+        Passthrough,
+        String,
+        "Hive 3-arg TRANSLATE, Spark-compatible",
+    ),
     e("rlike", Passthrough, String, "Spark-native operator form"),
     e("regexp", Passthrough, String, "Spark-native alias of rlike"),
-
     // Date / time conversions.
     e(
         "timestamp_from_unixtime",
@@ -547,7 +578,6 @@ const ENTRIES: &[FunctionEntry] = &[
         String,
         "Trino-compat name; Spark has DECODE(bytes, 'UTF-8')",
     ),
-
     // Hive reflection / Java method dispatch. Spark SQL doesn't have a
     // direct equivalent; emit with a warning so users see it.
     e(
@@ -562,7 +592,6 @@ const ENTRIES: &[FunctionEntry] = &[
         Misc,
         "alias of reflect",
     ),
-
     // Schema-handling helper used inside Coral itself.
     e(
         "generic_project",
@@ -570,7 +599,6 @@ const ENTRIES: &[FunctionEntry] = &[
         Misc,
         "Hive schema-projection UDTF; Coral-internal",
     ),
-
     // ============================================================
     // LinkedIn / Dali / Orbit FQN UDFs from the Java registry.
     //
@@ -582,129 +610,618 @@ const ENTRIES: &[FunctionEntry] = &[
     //
     // Total ~100 fully-qualified names from the Java registry.
     // ============================================================
-
-    e("com.linkedin.dali.bug.dummyudf", Disposition::UnsupportedBySpark, Misc, "Dali bug test UDF"),
-    e("com.linkedin.dali.customudf.date.hive.dateformattoepoch", Disposition::UnsupportedBySpark, DateTime, "Dali UDF"),
-    e("com.linkedin.dali.udf.date.hive.dateformattoepoch", Disposition::UnsupportedBySpark, DateTime, "Dali UDF"),
-    e("com.linkedin.dali.udf.date.hive.epochtodateformat", Disposition::UnsupportedBySpark, DateTime, "Dali UDF"),
-    e("com.linkedin.dali.udf.date.hive.epochtoepochmilliseconds", Disposition::UnsupportedBySpark, DateTime, "Dali UDF"),
-    e("com.linkedin.dali.udf.genericlookup.hive.genericlookup", Disposition::UnsupportedBySpark, Misc, "Dali lookup UDF"),
-    e("com.linkedin.dali.udf.isguestmemberid.hive.isguestmemberid", Disposition::UnsupportedBySpark, Misc, "Dali UDF"),
-    e("com.linkedin.dali.udf.maplookup.hive.maplookup", Disposition::UnsupportedBySpark, Misc, "Dali lookup UDF"),
-    e("com.linkedin.dali.udf.monarch.urngenerator", Disposition::UnsupportedBySpark, Misc, "Dali URN UDF"),
-    e("com.linkedin.dali.udf.portallookup.hive.portallookup", Disposition::UnsupportedBySpark, Misc, "Dali lookup UDF"),
-    e("com.linkedin.dali.udf.sanitize.hive.sanitize", Disposition::UnsupportedBySpark, Misc, "Dali UDF"),
-    e("com.linkedin.dali.udf.urnextractor.hive.urnextractor", Disposition::UnsupportedBySpark, Misc, "Dali URN UDF"),
-    e("com.linkedin.dali.udf.useragentparser.hive.useragentparser", Disposition::UnsupportedBySpark, Misc, "Dali UA UDF"),
-    e("com.linkedin.dali.udf.userinterfacelookup.hive.userinterfacelookup", Disposition::UnsupportedBySpark, Misc, "Dali lookup UDF"),
-    e("com.linkedin.dali.udf.watbotcrawlerlookup.hive.watbotcrawlerlookup", Disposition::UnsupportedBySpark, Misc, "Dali lookup UDF"),
-
-    e("com.linkedin.dali.view.udf.entityhandles.epochtimeinseconds", Disposition::UnsupportedBySpark, DateTime, "Dali view UDF"),
-    e("com.linkedin.dali.view.udf.entityhandles.epochtimeinsecondsnullable", Disposition::UnsupportedBySpark, DateTime, "Dali view UDF"),
-    e("com.linkedin.dali.view.udf.entityhandles.getidfromurn", Disposition::UnsupportedBySpark, Misc, "Dali view UDF"),
-    e("com.linkedin.dali.view.udf.entityhandles.getpermissionsstring", Disposition::UnsupportedBySpark, Misc, "Dali view UDF"),
-    e("com.linkedin.dali.view.udf.entityhandles.isurnfortype", Disposition::UnsupportedBySpark, Misc, "Dali view UDF"),
-    e("com.linkedin.dali.view.udf.entityhandles.phonenumbernormalizer", Disposition::UnsupportedBySpark, Misc, "Dali view UDF"),
-
-    e("com.linkedin.dali.views.job.udf.getuuid", Disposition::UnsupportedBySpark, Misc, "Dali view UDF"),
-    e("com.linkedin.dali.views.premium.udf.getchooserid", Disposition::UnsupportedBySpark, Misc, "Dali view UDF"),
-    e("com.linkedin.dali.views.premium.udf.getfamily", Disposition::UnsupportedBySpark, Misc, "Dali view UDF"),
-    e("com.linkedin.dali.views.premium.udf.getorderurn", Disposition::UnsupportedBySpark, Misc, "Dali view UDF"),
-    e("com.linkedin.dali.views.premium.udf.getpriceurnlist", Disposition::UnsupportedBySpark, Misc, "Dali view UDF"),
-
-    e("com.linkedin.dali.views.search.udf.createsearchactionresultudf", Disposition::UnsupportedBySpark, Misc, "Dali search UDF"),
-    e("com.linkedin.dali.views.search.udf.getactiontypeudf", Disposition::UnsupportedBySpark, Misc, "Dali search UDF"),
-    e("com.linkedin.dali.views.search.udf.gettyahresulttypeudf", Disposition::UnsupportedBySpark, Misc, "Dali search UDF"),
-    e("com.linkedin.dali.views.search.udf.getverticaludf", Disposition::UnsupportedBySpark, Misc, "Dali search UDF"),
-    e("com.linkedin.dali.views.search.udf.istyahsearchresultsudf", Disposition::UnsupportedBySpark, Misc, "Dali search UDF"),
-    e("com.linkedin.dali.views.search.udf.isvalidkeyudf", Disposition::UnsupportedBySpark, Misc, "Dali search UDF"),
-
-    e("com.linkedin.ds.udf.hive.filter.istestmemberid", Disposition::UnsupportedBySpark, Misc, "DS filter UDF"),
-    e("com.linkedin.ds.udf.hive.lookup.portallookup", Disposition::UnsupportedBySpark, Misc, "DS lookup UDF"),
-    e("com.linkedin.ds.udf.hive.lookup.userinterfacelookup", Disposition::UnsupportedBySpark, Misc, "DS lookup UDF"),
-    e("com.linkedin.ds.udf.hive.lookup.watbotcrawlerlookup", Disposition::UnsupportedBySpark, Misc, "DS lookup UDF"),
-
-    e("com.linkedin.dwh.udf.hive.lookup.oslookup", Disposition::UnsupportedBySpark, Misc, "DWH lookup UDF"),
-    e("com.linkedin.dwh.udf.profile.getprofileurl", Disposition::UnsupportedBySpark, Misc, "DWH profile UDF"),
-    e("com.linkedin.dwh.udf.sessionization.cleanupbrowserid", Disposition::UnsupportedBySpark, Misc, "DWH sessionization UDF"),
-
-    e("com.linkedin.etg.business.common.udfs.mapd365optionset", Disposition::UnsupportedBySpark, Misc, "ETG UDF"),
-    e("com.linkedin.etg.business.common.udfs.mapsfdcproductcode", Disposition::UnsupportedBySpark, Misc, "ETG UDF"),
-    e("com.linkedin.etg.business.common.udfs.mapsfdcproductid", Disposition::UnsupportedBySpark, Misc, "ETG UDF"),
-    e("com.linkedin.etg.business.common.udfs.mapsfdcproductname", Disposition::UnsupportedBySpark, Misc, "ETG UDF"),
-
-    e("com.linkedin.groot.runtime.udf.spark.extractcollectionudf", Disposition::UnsupportedBySpark, Misc, "Groot UDF"),
-    e("com.linkedin.groot.runtime.udf.spark.getmappedvalueudf", Disposition::UnsupportedBySpark, Misc, "Groot UDF"),
-    e("com.linkedin.groot.runtime.udf.spark.hasmemberconsentudf", Disposition::UnsupportedBySpark, Misc, "Groot UDF"),
-    e("com.linkedin.groot.runtime.udf.spark.redactfieldifudf", Disposition::UnsupportedBySpark, Misc, "Groot UDF"),
-    e("com.linkedin.groot.runtime.udf.spark.redactsecondaryschemafieldifudf", Disposition::UnsupportedBySpark, Misc, "Groot UDF"),
-
-    e("com.linkedin.jemslookup.udf.hive.jemslookup", Disposition::UnsupportedBySpark, Misc, "Jems lookup UDF"),
-    e("com.linkedin.jobs.udf.hive.convertindustrycode", Disposition::UnsupportedBySpark, Misc, "Jobs UDF"),
-
-    e("com.linkedin.orbit.emerger.coercerudfs.dynamicslineofbusinesscoercer", Disposition::UnsupportedBySpark, Misc, "Orbit UDF"),
-    e("com.linkedin.orbit.emerger.coercerudfs.generateid", Disposition::UnsupportedBySpark, Misc, "Orbit UDF"),
-
-    e("com.linkedin.policy.decoration.udfs.hasmemberconsent", Disposition::UnsupportedBySpark, Misc, "Policy UDF"),
-    e("com.linkedin.policy.decoration.udfs.redactfieldif", Disposition::UnsupportedBySpark, Misc, "Policy UDF"),
-    e("com.linkedin.policy.decoration.udfs.redactsecondaryschemafieldif", Disposition::UnsupportedBySpark, Misc, "Policy UDF"),
-
-    e("com.linkedin.recruiter.udf.geteventoriginudf", Disposition::UnsupportedBySpark, Misc, "Recruiter UDF"),
-    e("com.linkedin.recruiter.udf.queryroutingtypeudf", Disposition::UnsupportedBySpark, Misc, "Recruiter UDF"),
-
-    e("com.linkedin.snapshot.udf.constructsnapshoturnudf", Disposition::UnsupportedBySpark, Misc, "Snapshot UDF"),
-    e("com.linkedin.snapshot.udf.snapshotpurgeeligibleudf", Disposition::UnsupportedBySpark, Misc, "Snapshot UDF"),
-
-    e("com.linkedin.stdudfs.daliudfs.hive.dateformattoepoch", Disposition::UnsupportedBySpark, DateTime, "StdUDFs alias"),
-    e("com.linkedin.stdudfs.daliudfs.hive.epochtodateformat", Disposition::UnsupportedBySpark, DateTime, "StdUDFs alias"),
-    e("com.linkedin.stdudfs.daliudfs.hive.epochtoepochmilliseconds", Disposition::UnsupportedBySpark, DateTime, "StdUDFs alias"),
-    e("com.linkedin.stdudfs.daliudfs.hive.isguestmemberid", Disposition::UnsupportedBySpark, Misc, "StdUDFs alias"),
-    e("com.linkedin.stdudfs.daliudfs.hive.istestmemberid", Disposition::UnsupportedBySpark, Misc, "StdUDFs alias"),
-    e("com.linkedin.stdudfs.daliudfs.hive.maplookup", Disposition::UnsupportedBySpark, Misc, "StdUDFs alias"),
-    e("com.linkedin.stdudfs.daliudfs.hive.portallookup", Disposition::UnsupportedBySpark, Misc, "StdUDFs alias"),
-    e("com.linkedin.stdudfs.daliudfs.hive.sanitize", Disposition::UnsupportedBySpark, Misc, "StdUDFs alias"),
-    e("com.linkedin.stdudfs.daliudfs.hive.watbotcrawlerlookup", Disposition::UnsupportedBySpark, Misc, "StdUDFs alias"),
-
-    e("com.linkedin.stdudfs.hive.daliudfs.urnextractorfunctionwrapper", Disposition::UnsupportedBySpark, Misc, "StdUDFs wrapper"),
-    e("com.linkedin.stdudfs.lookup.hive.browserlookup", Disposition::UnsupportedBySpark, Misc, "StdUDFs lookup"),
-    e("com.linkedin.stdudfs.parsing.hive.ip2str", Disposition::UnsupportedBySpark, Misc, "StdUDFs parser"),
-    e("com.linkedin.stdudfs.parsing.hive.useragentparser", Disposition::UnsupportedBySpark, Misc, "StdUDFs parser"),
-    e("com.linkedin.stdudfs.stringudfs.hive.initcap", Disposition::UnsupportedBySpark, String, "StdUDFs string"),
-    e("com.linkedin.stdudfs.urnextractor.hive.urnextractorfunctionwrapper", Disposition::UnsupportedBySpark, Misc, "StdUDFs wrapper"),
-    e("com.linkedin.stdudfs.userinterfacelookup.hive.userinterfacelookup", Disposition::UnsupportedBySpark, Misc, "StdUDFs lookup"),
-    e("com.linkedin.stdudfs.userinterfacelookuptest.hive.userinterfacelookuptest", Disposition::UnsupportedBySpark, Misc, "StdUDFs test lookup"),
-
-    e("com.linkedin.tsar.hive.udf.tojymbiiscores", Disposition::UnsupportedBySpark, Misc, "TSAR UDF"),
-
-    e("com.linkedin.tscp.reporting.dali.udfs.activityid", Disposition::UnsupportedBySpark, Misc, "TSCP UDF"),
-    e("com.linkedin.tscp.reporting.dali.udfs.adclickclassifier", Disposition::UnsupportedBySpark, Misc, "TSCP UDF"),
-    e("com.linkedin.tscp.reporting.dali.udfs.adplacementclassifier", Disposition::UnsupportedBySpark, Misc, "TSCP UDF"),
-    e("com.linkedin.tscp.reporting.dali.udfs.sponsoredmessagenodeid", Disposition::UnsupportedBySpark, Misc, "TSCP UDF"),
-    e("com.linkedin.tscp.reporting.dali.udfs.unifiedcampaigntype", Disposition::UnsupportedBySpark, Misc, "TSCP UDF"),
-    e("com.linkedin.tscp.reporting.dali.udfs.urntoid", Disposition::UnsupportedBySpark, Misc, "TSCP UDF"),
-
-    e("com.linkedin.udf.aws.readjsonudf", Disposition::UnsupportedBySpark, Json, "AWS JSON UDF"),
-    e("com.linkedin.udf.hdfs.getdatasetnamefrompathudf", Disposition::UnsupportedBySpark, Misc, "HDFS UDF"),
-
-    e("com.linkedin.udfs.standard.hive.obfuscateall", Disposition::UnsupportedBySpark, Misc, "Obfuscation UDF"),
-    e("com.linkedin.udfs.standard.hive.obfuscatearray", Disposition::UnsupportedBySpark, Misc, "Obfuscation UDF"),
-    e("com.linkedin.udfs.standard.hive.obfuscatearrayevolve", Disposition::UnsupportedBySpark, Misc, "Obfuscation UDF"),
-    e("com.linkedin.udfs.standard.hive.obfuscatemap", Disposition::UnsupportedBySpark, Misc, "Obfuscation UDF"),
-    e("com.linkedin.udfs.standard.hive.obfuscatemapevolve", Disposition::UnsupportedBySpark, Misc, "Obfuscation UDF"),
-    e("com.linkedin.udfs.standard.hive.obfuscatemapkeyevolve", Disposition::UnsupportedBySpark, Misc, "Obfuscation UDF"),
-    e("com.linkedin.udfs.standard.hive.obfuscatemapvalevolve", Disposition::UnsupportedBySpark, Misc, "Obfuscation UDF"),
-    e("com.linkedin.udfs.standard.hive.obfuscatememberidnumeric", Disposition::UnsupportedBySpark, Misc, "Obfuscation UDF"),
-    e("com.linkedin.udfs.standard.hive.obfuscatememberidnumericint", Disposition::UnsupportedBySpark, Misc, "Obfuscation UDF"),
-    e("com.linkedin.udfs.standard.hive.obfuscatememberidnumericlong", Disposition::UnsupportedBySpark, Misc, "Obfuscation UDF"),
-    e("com.linkedin.udfs.standard.hive.obfuscatestruct", Disposition::UnsupportedBySpark, Misc, "Obfuscation UDF"),
-
-    e("com.linkedin.vector.daliview.udf.presentdatatype", Disposition::UnsupportedBySpark, Misc, "Vector Dali UDF"),
-    e("com.linkedin.vector.daliview.udf.presentmediatype", Disposition::UnsupportedBySpark, Misc, "Vector Dali UDF"),
-    e("com.linkedin.vector.daliview.udf.unifyvideooraudiodurationmicroseconds", Disposition::UnsupportedBySpark, Misc, "Vector Dali UDF"),
-
-    e("isb.getprofilesections", Disposition::UnsupportedBySpark, Misc, "ISB UDF"),
-    e("org.apache.hadoop.hive.ql.udf.generic.genericproject", Disposition::UnsupportedBySpark, Misc, "Hive generic_project FQN alias"),
-    e("udfs.seoreferrertrkudf", Disposition::UnsupportedBySpark, Misc, "SEO UDF"),
+    e(
+        "com.linkedin.dali.bug.dummyudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali bug test UDF",
+    ),
+    e(
+        "com.linkedin.dali.customudf.date.hive.dateformattoepoch",
+        Disposition::UnsupportedBySpark,
+        DateTime,
+        "Dali UDF",
+    ),
+    e(
+        "com.linkedin.dali.udf.date.hive.dateformattoepoch",
+        Disposition::UnsupportedBySpark,
+        DateTime,
+        "Dali UDF",
+    ),
+    e(
+        "com.linkedin.dali.udf.date.hive.epochtodateformat",
+        Disposition::UnsupportedBySpark,
+        DateTime,
+        "Dali UDF",
+    ),
+    e(
+        "com.linkedin.dali.udf.date.hive.epochtoepochmilliseconds",
+        Disposition::UnsupportedBySpark,
+        DateTime,
+        "Dali UDF",
+    ),
+    e(
+        "com.linkedin.dali.udf.genericlookup.hive.genericlookup",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali lookup UDF",
+    ),
+    e(
+        "com.linkedin.dali.udf.isguestmemberid.hive.isguestmemberid",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali UDF",
+    ),
+    e(
+        "com.linkedin.dali.udf.maplookup.hive.maplookup",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali lookup UDF",
+    ),
+    e(
+        "com.linkedin.dali.udf.monarch.urngenerator",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali URN UDF",
+    ),
+    e(
+        "com.linkedin.dali.udf.portallookup.hive.portallookup",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali lookup UDF",
+    ),
+    e(
+        "com.linkedin.dali.udf.sanitize.hive.sanitize",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali UDF",
+    ),
+    e(
+        "com.linkedin.dali.udf.urnextractor.hive.urnextractor",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali URN UDF",
+    ),
+    e(
+        "com.linkedin.dali.udf.useragentparser.hive.useragentparser",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali UA UDF",
+    ),
+    e(
+        "com.linkedin.dali.udf.userinterfacelookup.hive.userinterfacelookup",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali lookup UDF",
+    ),
+    e(
+        "com.linkedin.dali.udf.watbotcrawlerlookup.hive.watbotcrawlerlookup",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali lookup UDF",
+    ),
+    e(
+        "com.linkedin.dali.view.udf.entityhandles.epochtimeinseconds",
+        Disposition::UnsupportedBySpark,
+        DateTime,
+        "Dali view UDF",
+    ),
+    e(
+        "com.linkedin.dali.view.udf.entityhandles.epochtimeinsecondsnullable",
+        Disposition::UnsupportedBySpark,
+        DateTime,
+        "Dali view UDF",
+    ),
+    e(
+        "com.linkedin.dali.view.udf.entityhandles.getidfromurn",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali view UDF",
+    ),
+    e(
+        "com.linkedin.dali.view.udf.entityhandles.getpermissionsstring",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali view UDF",
+    ),
+    e(
+        "com.linkedin.dali.view.udf.entityhandles.isurnfortype",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali view UDF",
+    ),
+    e(
+        "com.linkedin.dali.view.udf.entityhandles.phonenumbernormalizer",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali view UDF",
+    ),
+    e(
+        "com.linkedin.dali.views.job.udf.getuuid",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali view UDF",
+    ),
+    e(
+        "com.linkedin.dali.views.premium.udf.getchooserid",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali view UDF",
+    ),
+    e(
+        "com.linkedin.dali.views.premium.udf.getfamily",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali view UDF",
+    ),
+    e(
+        "com.linkedin.dali.views.premium.udf.getorderurn",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali view UDF",
+    ),
+    e(
+        "com.linkedin.dali.views.premium.udf.getpriceurnlist",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali view UDF",
+    ),
+    e(
+        "com.linkedin.dali.views.search.udf.createsearchactionresultudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali search UDF",
+    ),
+    e(
+        "com.linkedin.dali.views.search.udf.getactiontypeudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali search UDF",
+    ),
+    e(
+        "com.linkedin.dali.views.search.udf.gettyahresulttypeudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali search UDF",
+    ),
+    e(
+        "com.linkedin.dali.views.search.udf.getverticaludf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali search UDF",
+    ),
+    e(
+        "com.linkedin.dali.views.search.udf.istyahsearchresultsudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali search UDF",
+    ),
+    e(
+        "com.linkedin.dali.views.search.udf.isvalidkeyudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Dali search UDF",
+    ),
+    e(
+        "com.linkedin.ds.udf.hive.filter.istestmemberid",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "DS filter UDF",
+    ),
+    e(
+        "com.linkedin.ds.udf.hive.lookup.portallookup",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "DS lookup UDF",
+    ),
+    e(
+        "com.linkedin.ds.udf.hive.lookup.userinterfacelookup",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "DS lookup UDF",
+    ),
+    e(
+        "com.linkedin.ds.udf.hive.lookup.watbotcrawlerlookup",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "DS lookup UDF",
+    ),
+    e(
+        "com.linkedin.dwh.udf.hive.lookup.oslookup",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "DWH lookup UDF",
+    ),
+    e(
+        "com.linkedin.dwh.udf.profile.getprofileurl",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "DWH profile UDF",
+    ),
+    e(
+        "com.linkedin.dwh.udf.sessionization.cleanupbrowserid",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "DWH sessionization UDF",
+    ),
+    e(
+        "com.linkedin.etg.business.common.udfs.mapd365optionset",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "ETG UDF",
+    ),
+    e(
+        "com.linkedin.etg.business.common.udfs.mapsfdcproductcode",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "ETG UDF",
+    ),
+    e(
+        "com.linkedin.etg.business.common.udfs.mapsfdcproductid",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "ETG UDF",
+    ),
+    e(
+        "com.linkedin.etg.business.common.udfs.mapsfdcproductname",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "ETG UDF",
+    ),
+    e(
+        "com.linkedin.groot.runtime.udf.spark.extractcollectionudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Groot UDF",
+    ),
+    e(
+        "com.linkedin.groot.runtime.udf.spark.getmappedvalueudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Groot UDF",
+    ),
+    e(
+        "com.linkedin.groot.runtime.udf.spark.hasmemberconsentudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Groot UDF",
+    ),
+    e(
+        "com.linkedin.groot.runtime.udf.spark.redactfieldifudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Groot UDF",
+    ),
+    e(
+        "com.linkedin.groot.runtime.udf.spark.redactsecondaryschemafieldifudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Groot UDF",
+    ),
+    e(
+        "com.linkedin.jemslookup.udf.hive.jemslookup",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Jems lookup UDF",
+    ),
+    e(
+        "com.linkedin.jobs.udf.hive.convertindustrycode",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Jobs UDF",
+    ),
+    e(
+        "com.linkedin.orbit.emerger.coercerudfs.dynamicslineofbusinesscoercer",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Orbit UDF",
+    ),
+    e(
+        "com.linkedin.orbit.emerger.coercerudfs.generateid",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Orbit UDF",
+    ),
+    e(
+        "com.linkedin.policy.decoration.udfs.hasmemberconsent",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Policy UDF",
+    ),
+    e(
+        "com.linkedin.policy.decoration.udfs.redactfieldif",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Policy UDF",
+    ),
+    e(
+        "com.linkedin.policy.decoration.udfs.redactsecondaryschemafieldif",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Policy UDF",
+    ),
+    e(
+        "com.linkedin.recruiter.udf.geteventoriginudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Recruiter UDF",
+    ),
+    e(
+        "com.linkedin.recruiter.udf.queryroutingtypeudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Recruiter UDF",
+    ),
+    e(
+        "com.linkedin.snapshot.udf.constructsnapshoturnudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Snapshot UDF",
+    ),
+    e(
+        "com.linkedin.snapshot.udf.snapshotpurgeeligibleudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Snapshot UDF",
+    ),
+    e(
+        "com.linkedin.stdudfs.daliudfs.hive.dateformattoepoch",
+        Disposition::UnsupportedBySpark,
+        DateTime,
+        "StdUDFs alias",
+    ),
+    e(
+        "com.linkedin.stdudfs.daliudfs.hive.epochtodateformat",
+        Disposition::UnsupportedBySpark,
+        DateTime,
+        "StdUDFs alias",
+    ),
+    e(
+        "com.linkedin.stdudfs.daliudfs.hive.epochtoepochmilliseconds",
+        Disposition::UnsupportedBySpark,
+        DateTime,
+        "StdUDFs alias",
+    ),
+    e(
+        "com.linkedin.stdudfs.daliudfs.hive.isguestmemberid",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "StdUDFs alias",
+    ),
+    e(
+        "com.linkedin.stdudfs.daliudfs.hive.istestmemberid",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "StdUDFs alias",
+    ),
+    e(
+        "com.linkedin.stdudfs.daliudfs.hive.maplookup",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "StdUDFs alias",
+    ),
+    e(
+        "com.linkedin.stdudfs.daliudfs.hive.portallookup",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "StdUDFs alias",
+    ),
+    e(
+        "com.linkedin.stdudfs.daliudfs.hive.sanitize",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "StdUDFs alias",
+    ),
+    e(
+        "com.linkedin.stdudfs.daliudfs.hive.watbotcrawlerlookup",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "StdUDFs alias",
+    ),
+    e(
+        "com.linkedin.stdudfs.hive.daliudfs.urnextractorfunctionwrapper",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "StdUDFs wrapper",
+    ),
+    e(
+        "com.linkedin.stdudfs.lookup.hive.browserlookup",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "StdUDFs lookup",
+    ),
+    e(
+        "com.linkedin.stdudfs.parsing.hive.ip2str",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "StdUDFs parser",
+    ),
+    e(
+        "com.linkedin.stdudfs.parsing.hive.useragentparser",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "StdUDFs parser",
+    ),
+    e(
+        "com.linkedin.stdudfs.stringudfs.hive.initcap",
+        Disposition::UnsupportedBySpark,
+        String,
+        "StdUDFs string",
+    ),
+    e(
+        "com.linkedin.stdudfs.urnextractor.hive.urnextractorfunctionwrapper",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "StdUDFs wrapper",
+    ),
+    e(
+        "com.linkedin.stdudfs.userinterfacelookup.hive.userinterfacelookup",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "StdUDFs lookup",
+    ),
+    e(
+        "com.linkedin.stdudfs.userinterfacelookuptest.hive.userinterfacelookuptest",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "StdUDFs test lookup",
+    ),
+    e(
+        "com.linkedin.tsar.hive.udf.tojymbiiscores",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "TSAR UDF",
+    ),
+    e(
+        "com.linkedin.tscp.reporting.dali.udfs.activityid",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "TSCP UDF",
+    ),
+    e(
+        "com.linkedin.tscp.reporting.dali.udfs.adclickclassifier",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "TSCP UDF",
+    ),
+    e(
+        "com.linkedin.tscp.reporting.dali.udfs.adplacementclassifier",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "TSCP UDF",
+    ),
+    e(
+        "com.linkedin.tscp.reporting.dali.udfs.sponsoredmessagenodeid",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "TSCP UDF",
+    ),
+    e(
+        "com.linkedin.tscp.reporting.dali.udfs.unifiedcampaigntype",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "TSCP UDF",
+    ),
+    e(
+        "com.linkedin.tscp.reporting.dali.udfs.urntoid",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "TSCP UDF",
+    ),
+    e(
+        "com.linkedin.udf.aws.readjsonudf",
+        Disposition::UnsupportedBySpark,
+        Json,
+        "AWS JSON UDF",
+    ),
+    e(
+        "com.linkedin.udf.hdfs.getdatasetnamefrompathudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "HDFS UDF",
+    ),
+    e(
+        "com.linkedin.udfs.standard.hive.obfuscateall",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Obfuscation UDF",
+    ),
+    e(
+        "com.linkedin.udfs.standard.hive.obfuscatearray",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Obfuscation UDF",
+    ),
+    e(
+        "com.linkedin.udfs.standard.hive.obfuscatearrayevolve",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Obfuscation UDF",
+    ),
+    e(
+        "com.linkedin.udfs.standard.hive.obfuscatemap",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Obfuscation UDF",
+    ),
+    e(
+        "com.linkedin.udfs.standard.hive.obfuscatemapevolve",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Obfuscation UDF",
+    ),
+    e(
+        "com.linkedin.udfs.standard.hive.obfuscatemapkeyevolve",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Obfuscation UDF",
+    ),
+    e(
+        "com.linkedin.udfs.standard.hive.obfuscatemapvalevolve",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Obfuscation UDF",
+    ),
+    e(
+        "com.linkedin.udfs.standard.hive.obfuscatememberidnumeric",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Obfuscation UDF",
+    ),
+    e(
+        "com.linkedin.udfs.standard.hive.obfuscatememberidnumericint",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Obfuscation UDF",
+    ),
+    e(
+        "com.linkedin.udfs.standard.hive.obfuscatememberidnumericlong",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Obfuscation UDF",
+    ),
+    e(
+        "com.linkedin.udfs.standard.hive.obfuscatestruct",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Obfuscation UDF",
+    ),
+    e(
+        "com.linkedin.vector.daliview.udf.presentdatatype",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Vector Dali UDF",
+    ),
+    e(
+        "com.linkedin.vector.daliview.udf.presentmediatype",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Vector Dali UDF",
+    ),
+    e(
+        "com.linkedin.vector.daliview.udf.unifyvideooraudiodurationmicroseconds",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Vector Dali UDF",
+    ),
+    e(
+        "isb.getprofilesections",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "ISB UDF",
+    ),
+    e(
+        "org.apache.hadoop.hive.ql.udf.generic.genericproject",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "Hive generic_project FQN alias",
+    ),
+    e(
+        "udfs.seoreferrertrkudf",
+        Disposition::UnsupportedBySpark,
+        Misc,
+        "SEO UDF",
+    ),
 ];
 
 // Re-exports for ergonomics inside the registry definition.

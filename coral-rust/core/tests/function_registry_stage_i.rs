@@ -32,7 +32,13 @@ fn control_flow_keywords_are_registered() {
 
 #[test]
 fn null_family_is_registered() {
-    for name in ["nullif", "isnull", "isnotnull", "tok_isnull", "tok_isnotnull"] {
+    for name in [
+        "nullif",
+        "isnull",
+        "isnotnull",
+        "tok_isnull",
+        "tok_isnotnull",
+    ] {
         assert!(function_catalog::is_known(name), "{name} not registered");
     }
 }
@@ -84,6 +90,23 @@ fn reflect_java_method_marked_unsupported() {
             "{name} should be UnsupportedBySpark (no Spark analog)"
         );
     }
+}
+
+#[test]
+fn strpos_renamed_to_instr_for_spark() {
+    // GaussDB / PG / Trino expose `strpos(haystack, needle) -> INT`.
+    // Spark's equivalent is INSTR with the same argument order, so the
+    // translator MUST rename (not reorder). Defends against accidentally
+    // regressing to passthrough (which would emit invalid Spark SQL)
+    // or to a reorder (which would flip semantics).
+    let e = function_catalog::lookup("strpos").unwrap_or_else(|| panic!("strpos missing"));
+    match e.disposition {
+        Disposition::Rename(new) => assert_eq!(new, "INSTR"),
+        other => panic!("expected Rename(INSTR), got {other:?}"),
+    }
+    let got = translate("SELECT strpos(s, 'A') FROM t").unwrap();
+    assert!(got.contains("INSTR(s, 'A')"), "{got}");
+    assert!(!got.to_uppercase().contains("STRPOS("), "{got}");
 }
 
 #[test]
@@ -148,7 +171,10 @@ fn legacy_rewrites_still_work_after_stage_i() {
         ("SELECT BOOL_AND(x) FROM t", "EVERY(x)"),
         ("SELECT BOOL_OR(x) FROM t", "SOME(x)"),
         ("SELECT ARRAY_AGG(x) FROM t", "COLLECT_LIST(x)"),
-        ("SELECT STRING_AGG(x, ',') FROM t", "CONCAT_WS(',', COLLECT_LIST(x))"),
+        (
+            "SELECT STRING_AGG(x, ',') FROM t",
+            "CONCAT_WS(',', COLLECT_LIST(x))",
+        ),
     ] {
         let got = translate(input).unwrap();
         assert!(got.contains(want), "input={input} got={got}");

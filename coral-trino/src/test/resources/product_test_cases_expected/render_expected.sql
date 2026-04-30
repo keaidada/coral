@@ -1,1 +1,0 @@
-select `render`(true)

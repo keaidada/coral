@@ -36,11 +36,7 @@ fn employees_catalog() -> InMemoryCatalog {
         (
             "hr",
             "departments",
-            &[
-                "id|INT",
-                "name|VARCHAR",
-                "floor|INT",
-            ],
+            &["id|INT", "name|VARCHAR", "floor|INT"],
         ),
     ])
 }
@@ -72,10 +68,22 @@ fn plain_select_preserves_column_types() {
 
     assert_eq!(rec.name, "v");
     assert_eq!(rec.fields.len(), 4);
-    assert_eq!(unwrap_nullable(&find_field(&rec, "id").avro_type), &AvroType::Long);
-    assert_eq!(unwrap_nullable(&find_field(&rec, "name").avro_type), &AvroType::String);
-    assert_eq!(unwrap_nullable(&find_field(&rec, "salary").avro_type), &AvroType::Double);
-    assert_eq!(unwrap_nullable(&find_field(&rec, "active").avro_type), &AvroType::Boolean);
+    assert_eq!(
+        unwrap_nullable(&find_field(&rec, "id").avro_type),
+        &AvroType::Long
+    );
+    assert_eq!(
+        unwrap_nullable(&find_field(&rec, "name").avro_type),
+        &AvroType::String
+    );
+    assert_eq!(
+        unwrap_nullable(&find_field(&rec, "salary").avro_type),
+        &AvroType::Double
+    );
+    assert_eq!(
+        unwrap_nullable(&find_field(&rec, "active").avro_type),
+        &AvroType::Boolean
+    );
 }
 
 #[test]
@@ -99,17 +107,16 @@ fn date_and_timestamp_get_logical_types() {
     )
     .unwrap();
     assert!(json.contains("\"logicalType\": \"date\""), "{json}");
-    assert!(json.contains("\"logicalType\": \"timestamp-millis\""), "{json}");
+    assert!(
+        json.contains("\"logicalType\": \"timestamp-millis\""),
+        "{json}"
+    );
 }
 
 #[test]
 fn decimal_carries_precision_and_scale() {
     let cat = employees_catalog();
-    let json = to_avro_schema(
-        "CREATE VIEW v AS SELECT scale FROM hr.employees",
-        &cat,
-    )
-    .unwrap();
+    let json = to_avro_schema("CREATE VIEW v AS SELECT scale FROM hr.employees", &cat).unwrap();
     assert!(json.contains("\"logicalType\": \"decimal\""), "{json}");
     assert!(json.contains("\"precision\": 10"), "{json}");
     assert!(json.contains("\"scale\": 4"), "{json}");
@@ -120,11 +127,7 @@ fn decimal_carries_precision_and_scale() {
 #[test]
 fn array_column_becomes_avro_array() {
     let cat = employees_catalog();
-    let rec = to_avro_record(
-        "CREATE VIEW v AS SELECT tags FROM hr.employees",
-        &cat,
-    )
-    .unwrap();
+    let rec = to_avro_record("CREATE VIEW v AS SELECT tags FROM hr.employees", &cat).unwrap();
     let f = find_field(&rec, "tags");
     match unwrap_nullable(&f.avro_type) {
         AvroType::Array(item) => assert_eq!(**item, AvroType::String),
@@ -135,11 +138,7 @@ fn array_column_becomes_avro_array() {
 #[test]
 fn map_column_becomes_avro_map() {
     let cat = employees_catalog();
-    let rec = to_avro_record(
-        "CREATE VIEW v AS SELECT attrs FROM hr.employees",
-        &cat,
-    )
-    .unwrap();
+    let rec = to_avro_record("CREATE VIEW v AS SELECT attrs FROM hr.employees", &cat).unwrap();
     let f = find_field(&rec, "attrs");
     match unwrap_nullable(&f.avro_type) {
         AvroType::Map(val) => assert_eq!(**val, AvroType::String),
@@ -150,11 +149,7 @@ fn map_column_becomes_avro_map() {
 #[test]
 fn struct_column_becomes_avro_record() {
     let cat = employees_catalog();
-    let rec = to_avro_record(
-        "CREATE VIEW v AS SELECT address FROM hr.employees",
-        &cat,
-    )
-    .unwrap();
+    let rec = to_avro_record("CREATE VIEW v AS SELECT address FROM hr.employees", &cat).unwrap();
     let f = find_field(&rec, "address");
     match unwrap_nullable(&f.avro_type) {
         AvroType::Record(r) => {
@@ -168,11 +163,7 @@ fn struct_column_becomes_avro_record() {
 #[test]
 fn bytea_column_becomes_bytes() {
     let cat = employees_catalog();
-    let rec = to_avro_record(
-        "CREATE VIEW v AS SELECT blob FROM hr.employees",
-        &cat,
-    )
-    .unwrap();
+    let rec = to_avro_record("CREATE VIEW v AS SELECT blob FROM hr.employees", &cat).unwrap();
     let f = find_field(&rec, "blob");
     assert_eq!(unwrap_nullable(&f.avro_type), &AvroType::Bytes);
 }
@@ -199,7 +190,10 @@ fn count_is_long() {
         &cat,
     )
     .unwrap();
-    assert_eq!(unwrap_nullable(&find_field(&rec, "n").avro_type), &AvroType::Long);
+    assert_eq!(
+        unwrap_nullable(&find_field(&rec, "n").avro_type),
+        &AvroType::Long
+    );
 }
 
 #[test]
@@ -210,7 +204,10 @@ fn length_is_int() {
         &cat,
     )
     .unwrap();
-    assert_eq!(unwrap_nullable(&find_field(&rec, "name_len").avro_type), &AvroType::Int);
+    assert_eq!(
+        unwrap_nullable(&find_field(&rec, "name_len").avro_type),
+        &AvroType::Int
+    );
 }
 
 #[test]
@@ -221,7 +218,10 @@ fn string_concat_yields_string() {
         &cat,
     )
     .unwrap();
-    assert_eq!(unwrap_nullable(&find_field(&rec, "handle").avro_type), &AvroType::String);
+    assert_eq!(
+        unwrap_nullable(&find_field(&rec, "handle").avro_type),
+        &AvroType::String
+    );
 }
 
 #[test]
@@ -257,8 +257,14 @@ fn qualified_column_ref_resolves_via_alias() {
         &cat,
     )
     .unwrap();
-    assert_eq!(unwrap_nullable(&find_field(&rec, "id").avro_type), &AvroType::Long);
-    assert_eq!(unwrap_nullable(&find_field(&rec, "dept_name").avro_type), &AvroType::String);
+    assert_eq!(
+        unwrap_nullable(&find_field(&rec, "id").avro_type),
+        &AvroType::Long
+    );
+    assert_eq!(
+        unwrap_nullable(&find_field(&rec, "dept_name").avro_type),
+        &AvroType::String
+    );
 }
 
 // ---------- JSON shape sanity ----------

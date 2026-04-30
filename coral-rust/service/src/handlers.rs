@@ -36,26 +36,114 @@ pub async fn health() -> Json<HealthResponse> {
 // POST /api/translations/translate
 // ---------------------------------------------------------------------
 
-pub async fn translate(Json(req): Json<TranslateRequest>) -> Json<TranslateResponse> {
+/// Plain-text response body matching the Java `coral-service`
+/// `TranslationController.translate` output:
+///
+///   Original query in <Source Language>:
+///   <user query>
+///   Translated to <Target Language>:
+///   <translated SQL>
+///
+/// The frontend calls `response.text()` (not `.json()`), so the
+/// response Content-Type must be `text/plain`. JSON-shaped errors
+/// would render as literal `{"translated":...}` text in the UI —
+/// which is exactly the bug report we just got.
+pub async fn translate(
+    Json(req): Json<TranslateRequest>,
+) -> (
+    axum::http::StatusCode,
+    [(axum::http::HeaderName, &'static str); 1],
+    String,
+) {
+    use axum::http::{header, StatusCode};
+
+    let source = req
+        .source_language
+        .as_deref()
+        .map(str::trim)
+        .map(str::to_ascii_lowercase);
     let target = req
         .target_language
         .as_deref()
         .and_then(coral_core::Target::parse)
         .unwrap_or(coral_core::Target::Spark);
 
-    match coral_core::translate_to(&req.query, target) {
-        Ok(sql) => Json(TranslateResponse {
-            translated: sql,
-            target: target.to_string(),
-            issues: vec![],
-            error: None,
-        }),
-        Err(e) => Json(TranslateResponse {
-            translated: String::new(),
-            target: target.to_string(),
-            issues: vec![],
-            error: Some(e.to_string()),
-        }),
+    let source_str = source.as_deref().unwrap_or("gaussdb");
+    let target_str = target.to_string();
+
+    // Same-language guard (matches Java).
+    if source.as_deref() == Some(target_str.as_str()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+            "Please choose different languages to translate between.\n".to_string(),
+        );
+    }
+
+    // Unsupported-combination guard. Same wording as Java so clients
+    // that match on the error string keep working.
+    let supported = matches!(
+        (source.as_deref(), target),
+        (Some("hive"), coral_core::Target::Spark)
+            | (Some("hive"), coral_core::Target::Trino)
+            | (Some("trino"), coral_core::Target::Spark)
+            | (Some("gaussdb"), coral_core::Target::Spark)
+            | (Some("spark"), coral_core::Target::Trino) // Rust-only extension
+            | (None, _) // source omitted = lenient default
+    );
+    if !supported {
+        return (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+            format!(
+                "Translation from {} to {} is not currently supported. \
+                 Coral-Service supports: Hive → Trino/Spark, Trino → Spark, GaussDB → Spark.\n",
+                language_label(source_str),
+                language_label(&target_str),
+            ),
+        );
+    }
+
+    match coral_core::translate_to_with(&req.query, target, /* pretty = */ true) {
+        Ok(sql) => {
+            // Java format:
+            //   Original query in <Source>:
+            //   <query>
+            //   Translated to <Target>:
+            //   <sql>
+            //
+            // The frontend dumps this into a <pre> block verbatim, so
+            // line breaks matter.
+            let body = format!(
+                "Original query in {}:\n{}\nTranslated to {}:\n{}\n",
+                language_label(source_str),
+                req.query.trim_end(),
+                language_label(&target_str),
+                sql,
+            );
+            (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+                body,
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+            format!("{e}\n"),
+        ),
+    }
+}
+
+/// Map our internal source/target identifier to the human-readable
+/// label Java prints. Exact strings from `TranslationController.java`.
+fn language_label(name: &str) -> &'static str {
+    match name.to_ascii_lowercase().as_str() {
+        "hive" => "Hive QL",
+        "trino" | "presto" => "Trino SQL",
+        "spark" => "Spark SQL",
+        "gaussdb" | "opengauss" => "GaussDB / openGauss SQL",
+        _ => "SQL",
     }
 }
 
@@ -81,6 +169,43 @@ pub async fn validate(Json(req): Json<ValidateRequest>) -> Json<ValidateResponse
 }
 
 // ---------------------------------------------------------------------
+// POST /api/catalog-ops/execute
+// ---------------------------------------------------------------------
+
+pub async fn execute_catalog_op(
+    body: String,
+) -> (
+    axum::http::StatusCode,
+    [(axum::http::HeaderName, &'static str); 1],
+    String,
+) {
+    use axum::http::{header, StatusCode};
+
+    let parts: Vec<&str> = body.split_whitespace().take(3).collect();
+    let accepted = parts.len() >= 3
+        && parts[0].eq_ignore_ascii_case("create")
+        && matches!(
+            parts[1].to_ascii_lowercase().as_str(),
+            "database" | "table" | "view"
+        );
+
+    if !accepted {
+        return (
+            StatusCode::BAD_REQUEST,
+            [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+            "Only queries starting with \"CREATE DATABASE|TABLE|VIEW\" are accepted.\n".to_string(),
+        );
+    }
+
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        "Creation successful (Rust service compatibility mode; no catalog persistence required).\n"
+            .to_string(),
+    )
+}
+
+// ---------------------------------------------------------------------
 // POST /api/visualizations/generategraphs
 // ---------------------------------------------------------------------
 
@@ -88,11 +213,7 @@ pub async fn generate_graphs(
     State(state): State<AppState>,
     Json(req): Json<VisualizeRequest>,
 ) -> impl IntoResponse {
-    let format = req
-        .format
-        .as_deref()
-        .unwrap_or("dot")
-        .to_ascii_lowercase();
+    let format = req.format.as_deref().unwrap_or("dot").to_ascii_lowercase();
     let source = match format.as_str() {
         "dot" => render_dot(&req.query),
         "plantuml" => render_plantuml(&req.query),

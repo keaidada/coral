@@ -28,10 +28,7 @@ fn custom_suffix_used() {
 
 #[test]
 fn two_tables_emit_three_branches() {
-    let out = incremental_sql(
-        "SELECT a.id FROM a JOIN b ON a.k = b.k",
-    )
-    .unwrap();
+    let out = incremental_sql("SELECT a.id FROM a JOIN b ON a.k = b.k").unwrap();
     let branch_count = out.matches("UNION ALL").count() + 1;
     assert_eq!(branch_count, 3, "expected 3 branches (2^2-1), got:\n{out}");
 
@@ -48,10 +45,7 @@ fn two_tables_emit_three_branches() {
 
 #[test]
 fn two_tables_cover_all_subsets() {
-    let out = incremental_sql(
-        "SELECT a.id FROM a JOIN b ON a.k = b.k",
-    )
-    .unwrap();
+    let out = incremental_sql("SELECT a.id FROM a JOIN b ON a.k = b.k").unwrap();
     let want = [
         "FROM a_delta JOIN b ",
         "FROM a JOIN b_delta ",
@@ -123,10 +117,7 @@ fn db_qualified_name_only_last_segment_gets_suffix() {
 
 #[test]
 fn subquery_table_also_expanded() {
-    let out = incremental_sql(
-        "SELECT x FROM t WHERE k IN (SELECT k FROM other)",
-    )
-    .unwrap();
+    let out = incremental_sql("SELECT x FROM t WHERE k IN (SELECT k FROM other)").unwrap();
     // 2 tables → 3 branches
     let branch_count = out.matches("UNION ALL").count() + 1;
     assert_eq!(branch_count, 3);

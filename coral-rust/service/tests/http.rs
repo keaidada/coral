@@ -35,7 +35,9 @@ async fn post_json_on(
         .unwrap();
     let resp = app.clone().oneshot(req).await.unwrap();
     let status = resp.status();
-    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
     (status, v)
 }
@@ -44,10 +46,7 @@ async fn get(path: &str) -> (StatusCode, axum::body::Bytes, Option<String>) {
     get_on(&router(), path).await
 }
 
-async fn get_on(
-    app: &Router,
-    path: &str,
-) -> (StatusCode, axum::body::Bytes, Option<String>) {
+async fn get_on(app: &Router, path: &str) -> (StatusCode, axum::body::Bytes, Option<String>) {
     let req = Request::builder()
         .method(Method::GET)
         .uri(path)
@@ -60,8 +59,48 @@ async fn get_on(
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
-    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
     (status, bytes, ct)
+}
+
+async fn post_json_text(path: &str, body: serde_json::Value) -> (StatusCode, String) {
+    post_json_text_on(&router(), path, body).await
+}
+
+async fn post_json_text_on(
+    app: &Router,
+    path: &str,
+    body: serde_json::Value,
+) -> (StatusCode, String) {
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri(path)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    let status = resp.status();
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    (status, String::from_utf8_lossy(&bytes).to_string())
+}
+
+async fn post_text(path: &str, body: &str) -> (StatusCode, String) {
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri(path)
+        .header(header::CONTENT_TYPE, "text/plain")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    let resp = router().oneshot(req).await.unwrap();
+    let status = resp.status();
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    (status, String::from_utf8_lossy(&bytes).to_string())
 }
 
 #[tokio::test]
@@ -80,21 +119,21 @@ async fn health_returns_ok() {
 
 #[tokio::test]
 async fn translate_to_spark_is_default() {
-    let (status, v) = post_json(
+    // No sourceLanguage → treated as "spark-ish" (default fallthrough).
+    // Response is plain text in the Java "Original query..." format.
+    let (status, body) = post_json_text(
         "/api/translations/translate",
         json!({ "query": "SELECT NVL(a, 0) FROM t" }),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(v["target"], "spark");
-    let translated = v["translated"].as_str().unwrap();
-    assert!(translated.to_uppercase().contains("COALESCE"), "{translated}");
-    assert!(v["error"].is_null());
+    assert!(body.contains("Translated to Spark SQL:"), "{body}");
+    assert!(body.to_uppercase().contains("COALESCE"), "{body}");
 }
 
 #[tokio::test]
 async fn translate_to_trino_explicit() {
-    let (status, v) = post_json(
+    let (status, body) = post_json_text(
         "/api/translations/translate",
         json!({
             "query": "SELECT GET_JSON_OBJECT(p, '$.k'), RAND() FROM t",
@@ -103,22 +142,93 @@ async fn translate_to_trino_explicit() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(v["target"], "trino");
-    let t = v["translated"].as_str().unwrap().to_uppercase();
-    assert!(t.contains("JSON_EXTRACT"), "{t}");
-    assert!(t.contains("RANDOM()"), "{t}");
+    assert!(body.contains("Translated to Trino SQL:"), "{body}");
+    let t = body.to_uppercase();
+    assert!(t.contains("JSON_EXTRACT"), "{body}");
+    assert!(t.contains("RANDOM()"), "{body}");
+}
+
+#[tokio::test]
+async fn translate_hive_to_spark_routing() {
+    let (status, body) = post_json_text(
+        "/api/translations/translate",
+        json!({
+            "query": "SELECT id, name FROM user",
+            "sourceLanguage": "hive",
+            "targetLanguage": "spark",
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    // Java's exact output layout: Original → Translated → SQL body with
+    // `default.` prefix and no AS between table and alias.
+    assert!(body.contains("Original query in Hive QL:"), "{body}");
+    assert!(body.contains("Translated to Spark SQL:"), "{body}");
+    assert!(body.contains("FROM default.user user"), "{body}");
+}
+
+#[tokio::test]
+async fn translate_hive_to_trino_matches_java_layout() {
+    let (status, body) = post_json_text(
+        "/api/translations/translate",
+        json!({
+            "query": "SELECT id, name FROM user",
+            "sourceLanguage": "hive",
+            "targetLanguage": "trino",
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.contains("Translated to Trino SQL:"), "{body}");
+    // Trino output: double-quoted idents + AS.
+    assert!(
+        body.contains(r#"FROM "default"."user" AS "user""#),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn translate_same_source_and_target_is_rejected() {
+    // Java returns 400 plain text; we match.
+    let (status, body) = post_json_text(
+        "/api/translations/translate",
+        json!({
+            "query": "SELECT 1",
+            "sourceLanguage": "spark",
+            "targetLanguage": "spark",
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body.to_lowercase().contains("different language"), "{body}");
+}
+
+#[tokio::test]
+async fn translate_unsupported_combination_returns_error() {
+    let (status, body) = post_json_text(
+        "/api/translations/translate",
+        json!({
+            "query": "SELECT 1",
+            "sourceLanguage": "gaussdb",
+            "targetLanguage": "trino",
+        }),
+    )
+    .await;
+    // Java returns 200 + message text here.
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.contains("not currently supported"), "{body}");
 }
 
 #[tokio::test]
 async fn translate_returns_error_field_on_parse_failure() {
-    let (status, v) = post_json(
+    let (status, body) = post_json_text(
         "/api/translations/translate",
         json!({ "query": "SELEKT garbage" }),
     )
     .await;
-    assert_eq!(status, StatusCode::OK); // 200 with error field, matches Java service behavior
-    assert_eq!(v["translated"], "");
-    assert!(v["error"].is_string());
+    // Java returns 500 when the parser throws.
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(!body.is_empty(), "expected error message");
 }
 
 #[tokio::test]
@@ -135,14 +245,28 @@ async fn validate_recognizes_good_sql() {
 
 #[tokio::test]
 async fn validate_reports_parse_error() {
-    let (status, v) = post_json(
-        "/api/translations/validate",
-        json!({ "query": "SELEKT" }),
-    )
-    .await;
+    let (status, v) = post_json("/api/translations/validate", json!({ "query": "SELEKT" })).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(v["parses"], false);
     assert!(v["parseError"].is_string());
+}
+
+#[tokio::test]
+async fn catalog_execute_accepts_create_ddl_for_frontend_compat() {
+    let (status, body) = post_text(
+        "/api/catalog-ops/execute",
+        "CREATE TABLE hr.employees (id INT, name STRING)",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.starts_with("Creation successful"), "{body}");
+}
+
+#[tokio::test]
+async fn catalog_execute_rejects_non_create_ddl() {
+    let (status, body) = post_text("/api/catalog-ops/execute", "DROP TABLE hr.employees").await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body.contains("Only queries starting"), "{body}");
 }
 
 #[tokio::test]

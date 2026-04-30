@@ -18,6 +18,7 @@
 pub mod catalog;
 pub mod date_format;
 pub mod error;
+pub mod format;
 pub mod function_catalog;
 pub mod preprocess;
 pub mod rewrite;
@@ -30,5 +31,6 @@ pub use function_catalog::{Category, Disposition, FunctionEntry};
 pub use target::Target;
 pub use translator::{
     translate, translate_all, translate_all_to, translate_to, translate_to_trino,
-    translate_with_catalog, translate_with_catalog_to, CatalogTranslation,
+    translate_to_with, translate_with_catalog, translate_with_catalog_to, unknown_functions,
+    CatalogTranslation,
 };

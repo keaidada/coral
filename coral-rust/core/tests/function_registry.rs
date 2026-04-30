@@ -8,7 +8,7 @@
 //! BOOL_AND/OR, ARRAY_AGG, STRING_AGG, TRUNC, REGEXP_SUBSTR, GENERATE_SERIES,
 //! TO_DATE / TO_TIMESTAMP / TO_CHAR.
 
-use coral_core::translate;
+use coral_core::{translate, unknown_functions};
 
 fn assert_contains(input: &str, snippet: &str) {
     let got = translate(input).unwrap_or_else(|e| panic!("translate failed: {e}"));
@@ -186,6 +186,18 @@ fn lowercase_function_names_still_match() {
 fn mixed_case_function_names_still_match() {
     assert_contains("SELECT Nvl(x, 0) FROM t", "COALESCE(x, 0)");
     assert_contains("SELECT DeCoDe(x, 1, 'a') FROM t", "CASE WHEN");
+}
+
+#[test]
+fn unknown_function_detection_flags_typos() {
+    let unknown = unknown_functions("SELECT WNVL(x, 0), NVL(y, 0), WNVL(z, 1) FROM t").unwrap();
+    assert_eq!(unknown, vec!["wnvl"]);
+}
+
+#[test]
+fn unknown_function_detection_accepts_registered_functions() {
+    let unknown = unknown_functions("SELECT NVL(x, 0), COALESCE(y, 0), RAND() FROM t").unwrap();
+    assert!(unknown.is_empty(), "{unknown:?}");
 }
 
 #[test]

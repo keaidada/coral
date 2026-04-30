@@ -1,1 +1,0 @@
-select extract(day from timestamp '2001-08-22 03:04:05.3')

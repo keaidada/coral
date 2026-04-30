@@ -206,10 +206,7 @@ fn rewrite_datediff(f: &mut Function) -> Option<Expr> {
         data_type: DataType::Date,
         format: None,
     };
-    Some(call(
-        "DATE_DIFF",
-        vec![day_lit, cast_date(b), cast_date(a)],
-    ))
+    Some(call("DATE_DIFF", vec![day_lit, cast_date(b), cast_date(a)]))
 }
 
 fn rewrite_to_date(f: &mut Function) -> Option<Expr> {

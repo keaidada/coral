@@ -9,13 +9,14 @@
 //! SQL to stdout.
 //!
 //! ```bash
-//! echo "SELECT NVL(x, 0) FROM t" | coral
-//! echo "SELECT RAND() FROM t"    | coral --target trino
-//! coral --file query.sql --target trino
-//! coral --smoke                  # 6 samples, Spark output (default)
+//! echo "SELECT NVL(x, 0) FROM t" | coral --source gaussdb --target spark
+//! echo "SELECT RAND() FROM t"    | coral --source hive --target trino
+//! coral --file query.sql --from trino --to spark
+//! coral --smoke                  # 6 GaussDB samples, Spark output (default)
 //! coral --smoke --target trino   # same 6 samples, Trino output
 //! ```
 
+use std::collections::BTreeSet;
 use std::io::Read;
 
 use anyhow::{bail, Context, Result};
@@ -25,36 +26,77 @@ use clap::Parser;
 #[command(
     name = "coral",
     version,
-    about = "GaussDB / Hive → Spark or Trino SQL translator"
+    about = "本地 SQL 方言转换工具：GaussDB / Hive / Spark / Trino → Spark / Trino",
+    override_usage = "coral [选项]",
+    help_template = "{about-with-newline}\n用法: {usage}\n\n选项:\n{options}{after-help}",
+    disable_help_flag = true,
+    disable_version_flag = true,
+    after_help = "\n示例:\n  coral --file query.sql --source gaussdb --target spark --pretty\n  cat hive.sql | coral --from hive --to trino\n  echo \"SELECT NVL(x, 0) FROM t\" | coral --source gaussdb --target spark"
 )]
 struct Cli {
-    /// Path to a SQL file; when omitted, reads from stdin.
-    #[arg(long, short)]
+    /// SQL 文件路径；不指定时从标准输入 stdin 读取。
+    #[arg(long, short, value_name = "SQL文件")]
     file: Option<std::path::PathBuf>,
 
-    /// Run the built-in demo (the 6 samples from coral-gaussdb-spark's
-    /// SmokeDemo). Honors `--target`.
+    /// 输入数据源/SQL 方言。可选值：gaussdb, opengauss, open_gauss, postgres, postgresql, hive, hiveql, spark, spark_sql, sparksql, trino, presto。默认：gaussdb。别名：--from。
+    #[arg(
+        long,
+        alias = "from",
+        default_value = "gaussdb",
+        hide_default_value = true,
+        value_name = "输入方言"
+    )]
+    source: String,
+
+    /// 运行内置演示样例；会按照 --target 指定的目标方言输出。
     #[arg(long)]
     smoke: bool,
 
-    /// Print the function coverage table (what Spark/Trino name each
-    /// Hive/GaussDB function maps to).
+    /// 打印函数映射覆盖表，展示 Hive/GaussDB 函数如何映射到 Spark/Trino。
     #[arg(long)]
     list_functions: bool,
 
-    /// Output dialect: `spark` (default) or `trino`.
-    #[arg(long, default_value = "spark")]
+    /// 输出目标 SQL 方言。可选值：spark, trino, presto。默认：spark。别名：--to。
+    #[arg(
+        long,
+        alias = "to",
+        default_value = "spark",
+        hide_default_value = true,
+        value_name = "输出方言"
+    )]
     target: String,
+
+    /// 美化输出 SQL：表自动加别名，并将顶层子句换行；默认紧凑输出。
+    #[arg(long)]
+    pretty: bool,
+
+    /// 允许未注册函数透传。可不带值放行全部未知函数，也可指定逗号分隔 UDF 白名单，例如：--allow-unknown-functions YNVL,XNVL。
+    #[arg(
+        long,
+        value_name = "UDF列表",
+        num_args = 0..=1,
+        default_missing_value = "*"
+    )]
+    allow_unknown_functions: Option<String>,
+
+    /// 显示帮助信息。
+    #[arg(short = 'h', long = "help", action = clap::ArgAction::Help)]
+    _help: Option<bool>,
+
+    /// 显示版本信息。
+    #[arg(short = 'V', long = "version", action = clap::ArgAction::Version)]
+    _version: Option<bool>,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    let source = normalize_source(&cli.source)?;
     let target = coral_core::Target::parse(&cli.target)
         .with_context(|| format!("unknown --target {:?} (use 'spark' or 'trino')", cli.target))?;
 
     if cli.smoke {
-        return run_smoke(target);
+        return run_smoke(&source, target);
     }
 
     if cli.list_functions {
@@ -74,10 +116,82 @@ fn main() -> Result<()> {
         }
     };
 
-    let out = coral_core::translate_to(&input, target)
-        .with_context(|| format!("translating GaussDB → {target}"))?;
+    let allow_unknown = parse_unknown_function_allowlist(cli.allow_unknown_functions.as_deref());
+    let unknown = coral_core::unknown_functions(&input)?;
+    let rejected = rejected_unknown_functions(&unknown, &allow_unknown);
+    if !rejected.is_empty() {
+        bail!(
+            "发现未知函数: {}。如果这是业务 UDF，请使用 --allow-unknown-functions {}；也可不带值放行全部未知函数。",
+            rejected.join(", "),
+            rejected.join(",")
+        );
+    }
+
+    let out = coral_core::translate_to_with(&input, target, cli.pretty)
+        .with_context(|| format!("translating {source} → {target}"))?;
     println!("{}", out);
     Ok(())
+}
+
+fn normalize_source(source: &str) -> Result<String> {
+    let lower = source.trim().to_ascii_lowercase();
+    let canonical = match lower.as_str() {
+        "gaussdb" | "opengauss" | "open_gauss" | "postgres" | "postgresql" => "gaussdb",
+        "hive" | "hiveql" => "hive",
+        "spark" | "spark_sql" | "sparksql" => "spark",
+        "trino" | "presto" => "trino",
+        _ => bail!(
+            "unknown --source {:?} (use 'gaussdb', 'hive', 'spark', or 'trino')",
+            source
+        ),
+    };
+    Ok(canonical.to_string())
+}
+
+fn source_label(source: &str) -> &'static str {
+    match source {
+        "gaussdb" => "GaussDB / openGauss",
+        "hive" => "Hive",
+        "spark" => "Spark",
+        "trino" => "Trino",
+        _ => "SQL",
+    }
+}
+
+enum UnknownFunctionAllowlist {
+    None,
+    All,
+    Names(BTreeSet<String>),
+}
+
+fn parse_unknown_function_allowlist(raw: Option<&str>) -> UnknownFunctionAllowlist {
+    let Some(raw) = raw else {
+        return UnknownFunctionAllowlist::None;
+    };
+    if raw.trim().is_empty() || raw.trim() == "*" {
+        return UnknownFunctionAllowlist::All;
+    }
+    let names = raw
+        .split(',')
+        .map(|name| name.trim().to_ascii_lowercase())
+        .filter(|name| !name.is_empty())
+        .collect();
+    UnknownFunctionAllowlist::Names(names)
+}
+
+fn rejected_unknown_functions(
+    unknown: &[String],
+    allowlist: &UnknownFunctionAllowlist,
+) -> Vec<String> {
+    match allowlist {
+        UnknownFunctionAllowlist::All => vec![],
+        UnknownFunctionAllowlist::None => unknown.to_vec(),
+        UnknownFunctionAllowlist::Names(names) => unknown
+            .iter()
+            .filter(|name| !names.contains(name.as_str()))
+            .cloned()
+            .collect(),
+    }
 }
 
 fn print_function_catalog() -> Result<()> {
@@ -141,12 +255,17 @@ fn format_category(c: coral_core::Category) -> &'static str {
     }
 }
 
-fn run_smoke(target: coral_core::Target) -> Result<()> {
+fn run_smoke(source: &str, target: coral_core::Target) -> Result<()> {
+    println!("# source: {}", source_label(source));
     println!("# target: {target}\n");
     let mut any_error = false;
     for (i, sql) in SMOKE_SAMPLES.iter().enumerate() {
         println!("\n=============== sample #{} ===============", i + 1);
-        println!("[GaussDB]\n  {}\n", sql.trim().replace('\n', "\n  "));
+        println!(
+            "[{}]\n  {}\n",
+            source_label(source),
+            sql.trim().replace('\n', "\n  ")
+        );
         match coral_core::translate_to(sql, target) {
             Ok(out) => println!("[{target}]\n  {}", out.replace('\n', "\n  ")),
             Err(e) => {

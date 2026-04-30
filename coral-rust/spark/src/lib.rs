@@ -25,5 +25,7 @@ pub mod plan;
 pub mod view;
 
 pub use error::SparkError;
-pub use plan::{analyze_plan, classify_predicate, PlanPredicateInfo, PredicateClass, PredicateFinding};
+pub use plan::{
+    analyze_plan, classify_predicate, PlanPredicateInfo, PredicateClass, PredicateFinding,
+};
 pub use view::{prepare_view, SparkView};

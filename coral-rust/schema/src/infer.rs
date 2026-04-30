@@ -194,7 +194,10 @@ fn project_field<C: TypedCatalog>(
             // the outermost projection; keep it as a single STRING
             // placeholder rather than failing. A future version can
             // refuse wildcards instead.
-            (format!("col{index}"), AvroType::Nullable(Box::new(AvroType::String)))
+            (
+                format!("col{index}"),
+                AvroType::Nullable(Box::new(AvroType::String)),
+            )
         }
     }
 }
@@ -215,15 +218,12 @@ fn infer_type<C: TypedCatalog>(expr: &Expr, scope: &[FromEntry], catalog: &C) ->
     nullable(infer_type_inner(expr, scope, catalog))
 }
 
-fn infer_type_inner<C: TypedCatalog>(
-    expr: &Expr,
-    scope: &[FromEntry],
-    catalog: &C,
-) -> AvroType {
+fn infer_type_inner<C: TypedCatalog>(expr: &Expr, scope: &[FromEntry], catalog: &C) -> AvroType {
     match expr {
         // ---- References ----
-        Expr::Identifier(ident) => lookup_bare_column(&ident.value, scope, catalog)
-            .unwrap_or(AvroType::String),
+        Expr::Identifier(ident) => {
+            lookup_bare_column(&ident.value, scope, catalog).unwrap_or(AvroType::String)
+        }
 
         Expr::CompoundIdentifier(parts) => {
             if parts.len() == 2 {
@@ -295,17 +295,18 @@ fn function_return_type(f: &sqlparser::ast::Function) -> AvroType {
         "current_timestamp" | "now" | "sysdate" | "to_timestamp" | "from_unixtime" => {
             AvroType::TimestampMillis
         }
-        "year" | "month" | "day" | "hour" | "minute" | "second" | "quarter"
-        | "dayofmonth" | "weekofyear" => AvroType::Int,
+        "year" | "month" | "day" | "hour" | "minute" | "second" | "quarter" | "dayofmonth"
+        | "weekofyear" => AvroType::Int,
         "length" | "character_length" | "octet_length" | "ascii" => AvroType::Int,
-        "upper" | "lower" | "concat" | "concat_ws" | "substring" | "substr" | "trim"
-        | "ltrim" | "rtrim" | "replace" | "translate" | "regexp_replace" | "regexp_extract"
-        | "lpad" | "rpad" | "reverse" | "to_char" | "date_format" | "format_number"
-        | "soundex" | "initcap" => AvroType::String,
+        "upper" | "lower" | "concat" | "concat_ws" | "substring" | "substr" | "trim" | "ltrim"
+        | "rtrim" | "replace" | "translate" | "regexp_replace" | "regexp_extract" | "lpad"
+        | "rpad" | "reverse" | "to_char" | "date_format" | "format_number" | "soundex"
+        | "initcap" => AvroType::String,
         "abs" | "ceil" | "ceiling" | "floor" | "round" | "bround" | "exp" | "ln" | "log"
-        | "log10" | "log2" | "pow" | "power" | "sqrt" | "cbrt" | "sign" | "sin" | "cos"
-        | "tan" | "asin" | "acos" | "atan" | "atan2" | "degrees" | "radians" | "mod"
-        | "pmod" => AvroType::Double,
+        | "log10" | "log2" | "pow" | "power" | "sqrt" | "cbrt" | "sign" | "sin" | "cos" | "tan"
+        | "asin" | "acos" | "atan" | "atan2" | "degrees" | "radians" | "mod" | "pmod" => {
+            AvroType::Double
+        }
         "md5" | "sha" | "sha1" | "hex" => AvroType::String,
         "crc32" => AvroType::Long,
         "rand" | "random" => AvroType::Double,
@@ -339,8 +340,15 @@ fn value_to_avro(v: &Value) -> AvroType {
 fn data_type_to_avro(dt: &sqlparser::ast::DataType) -> AvroType {
     use sqlparser::ast::DataType as D;
     match dt {
-        D::TinyInt(_) | D::UnsignedTinyInt(_) | D::SmallInt(_) | D::UnsignedSmallInt(_)
-        | D::Int(_) | D::Integer(_) | D::UnsignedInt(_) | D::UnsignedInteger(_) | D::Int4(_)
+        D::TinyInt(_)
+        | D::UnsignedTinyInt(_)
+        | D::SmallInt(_)
+        | D::UnsignedSmallInt(_)
+        | D::Int(_)
+        | D::Integer(_)
+        | D::UnsignedInt(_)
+        | D::UnsignedInteger(_)
+        | D::Int4(_)
         | D::Int2(_) => AvroType::Int,
         D::BigInt(_) | D::UnsignedBigInt(_) | D::Int8(_) => AvroType::Long,
         D::Real | D::Float4 => AvroType::Float,
@@ -352,9 +360,7 @@ fn data_type_to_avro(dt: &sqlparser::ast::DataType) -> AvroType {
         D::Decimal(info) | D::Numeric(info) | D::BigNumeric(info) | D::Dec(info) => {
             let (p, s) = match info {
                 sqlparser::ast::ExactNumberInfo::Precision(p) => (*p as u32, 0u32),
-                sqlparser::ast::ExactNumberInfo::PrecisionAndScale(p, s) => {
-                    (*p as u32, *s as u32)
-                }
+                sqlparser::ast::ExactNumberInfo::PrecisionAndScale(p, s) => (*p as u32, *s as u32),
                 sqlparser::ast::ExactNumberInfo::None => (18, 2),
             };
             AvroType::Decimal {
@@ -429,9 +435,7 @@ fn hive_type_to_avro(t: &str) -> AvroType {
     let upper = t.to_ascii_uppercase();
     // Primitive names (may carry parens — `VARCHAR(64)` etc — or angle
     // brackets — `ARRAY<INT>`, `MAP<K,V>`, `STRUCT<...>`).
-    let stop = upper
-        .find(['(', '<'])
-        .unwrap_or(upper.len());
+    let stop = upper.find(['(', '<']).unwrap_or(upper.len());
     let head = upper[..stop].trim();
     match head {
         "BOOLEAN" | "BOOL" => AvroType::Boolean,
@@ -464,7 +468,10 @@ fn hive_type_to_avro(t: &str) -> AvroType {
                 // Hive MAP<K, V> — Avro only allows string keys; we use the
                 // value type as given.
                 let parts = split_top_level_comma(&inner);
-                let v = parts.get(1).cloned().unwrap_or_else(|| "STRING".to_string());
+                let v = parts
+                    .get(1)
+                    .cloned()
+                    .unwrap_or_else(|| "STRING".to_string());
                 AvroType::Map(Box::new(hive_type_to_avro(&v)))
             } else {
                 AvroType::Map(Box::new(AvroType::String))

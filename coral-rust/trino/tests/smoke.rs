@@ -14,7 +14,9 @@ fn normalize(s: &str) -> String {
 }
 
 fn contains_ci(haystack: &str, needle: &str) -> bool {
-    haystack.to_ascii_uppercase().contains(&needle.to_ascii_uppercase())
+    haystack
+        .to_ascii_uppercase()
+        .contains(&needle.to_ascii_uppercase())
 }
 
 #[test]
@@ -56,10 +58,7 @@ fn array_contains_becomes_contains() {
 
 #[test]
 fn base64_family_rewrites() {
-    let got = to_trino_sql(
-        "SELECT BASE64(x), UNBASE64(y), HEX(z), UNHEX(w) FROM t",
-    )
-    .unwrap();
+    let got = to_trino_sql("SELECT BASE64(x), UNBASE64(y), HEX(z), UNHEX(w) FROM t").unwrap();
     assert!(contains_ci(&got, "TO_BASE64(x)"), "{got}");
     assert!(contains_ci(&got, "FROM_BASE64(y)"), "{got}");
     assert!(contains_ci(&got, "TO_HEX(z)"), "{got}");
@@ -99,7 +98,10 @@ fn pmod_expands_to_conditional_modulo() {
 fn date_add_adds_unit_literal() {
     let got = to_trino_sql("SELECT DATE_ADD(d, 30) FROM t").unwrap();
     let n = normalize(&got).to_ascii_uppercase();
-    assert!(n.contains("'DAY'") || n.contains("'day'".to_uppercase().as_str()), "{n}");
+    assert!(
+        n.contains("'DAY'") || n.contains("'day'".to_uppercase().as_str()),
+        "{n}"
+    );
     assert!(n.contains("CAST(D AS DATE)"), "{n}");
 }
 
@@ -150,12 +152,12 @@ fn pg_regex_operator_lands_as_regexp_like_in_trino() {
 fn spark_specific_oracle_plus_still_works() {
     // (+) comes from the Spark preprocessor and must survive the Trino
     // path (it's a text-level preprocessor, not dialect-specific).
-    let got = to_trino_sql(
-        "SELECT * FROM a, b WHERE a.id = b.id(+)",
-    )
-    .unwrap();
+    let got = to_trino_sql("SELECT * FROM a, b WHERE a.id = b.id(+)").unwrap();
     let n = normalize(&got).to_ascii_uppercase();
-    assert!(n.contains("LEFT JOIN") || n.contains("LEFT OUTER JOIN"), "{n}");
+    assert!(
+        n.contains("LEFT JOIN") || n.contains("LEFT OUTER JOIN"),
+        "{n}"
+    );
     assert!(!n.contains("(+)"), "{n}");
 }
 

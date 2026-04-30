@@ -25,12 +25,7 @@ fn sample_catalog() -> InMemoryCatalog {
         (
             "hr",
             "employees",
-            &[
-                "id|BIGINT",
-                "name|VARCHAR",
-                "salary|DOUBLE",
-                "dept_id|INT",
-            ],
+            &["id|BIGINT", "name|VARCHAR", "salary|DOUBLE", "dept_id|INT"],
         ),
         ("hr", "departments", &["id|INT", "name|VARCHAR"]),
     ])
@@ -108,7 +103,10 @@ fn pig_translator_runs_on_the_sample() {
     assert!(pig.contains("JOIN LEFT OUTER"), "{pig}");
     assert!(pig.contains("GROUP"), "{pig}");
     assert!(pig.contains("COUNT"), "{pig}");
-    assert!(pig.trim_end().ends_with("OUT = t5;") || pig.contains("OUT ="), "{pig}");
+    assert!(
+        pig.trim_end().ends_with("OUT = t5;") || pig.contains("OUT ="),
+        "{pig}"
+    );
 }
 
 // ---------- Incremental ----------
@@ -155,10 +153,13 @@ async fn service_translate_endpoint_spark_and_trino() {
         .unwrap();
     let resp = app.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20).await.unwrap();
-    let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(v["target"], "spark");
-    assert!(v["translated"].as_str().unwrap().to_uppercase().contains("COALESCE"));
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    // New: plain-text body matching Java's output format.
+    let body = String::from_utf8_lossy(&bytes);
+    assert!(body.contains("Translated to Spark SQL:"), "{body}");
+    assert!(body.to_uppercase().contains("COALESCE"), "{body}");
 
     // Same query, Trino.
     let req = Request::builder()
@@ -170,9 +171,11 @@ async fn service_translate_endpoint_spark_and_trino() {
         ))
         .unwrap();
     let resp = app.oneshot(req).await.unwrap();
-    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20).await.unwrap();
-    let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(v["target"], "trino");
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let body = String::from_utf8_lossy(&bytes);
+    assert!(body.contains("Translated to Trino SQL:"), "{body}");
 }
 
 // ---------- Sanity: every backend composes without panics on SmokeDemo ----------

@@ -199,10 +199,7 @@ pub fn analyze_plan(plan: &str) -> Vec<PlanPredicateInfo> {
         // output puts them one level down).
         let predicates = extract_predicates_from_same_line(line);
 
-        out.push(PlanPredicateInfo {
-            table,
-            predicates,
-        });
+        out.push(PlanPredicateInfo { table, predicates });
     }
     out
 }
@@ -276,9 +273,7 @@ fn extract_table(line: &str) -> Option<String> {
     // token after the Scan keyword and before any `[` / `(`.
     let after = skip_to_scan_keyword(line)?;
     // Split on whitespace, brackets, parens, commas.
-    let stop = after
-        .find(['[', '(', ','])
-        .unwrap_or(after.len());
+    let stop = after.find(['[', '(', ',']).unwrap_or(after.len());
     let rest = after[..stop].trim();
     // Now rest might be "foo.bar" or "parquet foo.bar" or just "foo"
     // depending on dialect. Pick the last whitespace-separated token.

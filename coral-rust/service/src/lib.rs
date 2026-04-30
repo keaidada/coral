@@ -36,22 +36,17 @@ pub fn router() -> Router {
     let state = AppState::new();
     Router::new()
         .route("/api/health", get(handlers::health))
+        .route("/api/translations/translate", post(handlers::translate))
+        .route("/api/translations/validate", post(handlers::validate))
         .route(
-            "/api/translations/translate",
-            post(handlers::translate),
-        )
-        .route(
-            "/api/translations/validate",
-            post(handlers::validate),
+            "/api/catalog-ops/execute",
+            post(handlers::execute_catalog_op),
         )
         .route(
             "/api/visualizations/generategraphs",
             post(handlers::generate_graphs),
         )
-        .route(
-            "/api/visualizations/:id",
-            get(handlers::get_visualization),
-        )
+        .route("/api/visualizations/:id", get(handlers::get_visualization))
         .route("/api/functions", get(handlers::list_functions))
         .with_state(state)
         .layer(CorsLayer::permissive())

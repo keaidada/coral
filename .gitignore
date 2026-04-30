@@ -17,6 +17,7 @@ derby.log
 ligradle
 .DS_Store
 *.patch
+*.log
 */metastore_db
 .pyc
 .gitnexus
@@ -29,6 +30,7 @@ db/
 
 # Rust build artifacts (coral-rust/)
 target/
+coral-rust/dist/
 **/*.rs.bk
 
 # cargo-fuzz artifacts (keep fuzz/Cargo.toml + fuzz/fuzz_targets + corpus)

@@ -60,5 +60,7 @@ fn kind_shape(k: NodeKind) -> &'static str {
 }
 
 fn escape(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
 }

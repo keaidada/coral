@@ -15,9 +15,7 @@
 //!      the delta suffix, render, and collect.
 //!   5. Join the rendered variants with `UNION ALL`.
 
-use sqlparser::ast::{
-    ObjectName, Statement, TableFactor, VisitMut, VisitorMut,
-};
+use sqlparser::ast::{ObjectName, Statement, TableFactor, VisitMut, VisitorMut};
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
 use std::ops::ControlFlow;
@@ -79,10 +77,7 @@ struct TableCounter {
 impl VisitorMut for TableCounter {
     type Break = std::convert::Infallible;
 
-    fn post_visit_table_factor(
-        &mut self,
-        factor: &mut TableFactor,
-    ) -> ControlFlow<Self::Break> {
+    fn post_visit_table_factor(&mut self, factor: &mut TableFactor) -> ControlFlow<Self::Break> {
         if matches!(factor, TableFactor::Table { .. }) {
             self.count += 1;
         }
@@ -102,10 +97,7 @@ struct TableRewriter<'a> {
 impl<'a> VisitorMut for TableRewriter<'a> {
     type Break = std::convert::Infallible;
 
-    fn post_visit_table_factor(
-        &mut self,
-        factor: &mut TableFactor,
-    ) -> ControlFlow<Self::Break> {
+    fn post_visit_table_factor(&mut self, factor: &mut TableFactor) -> ControlFlow<Self::Break> {
         if let TableFactor::Table { name, .. } = factor {
             let idx = self.visited;
             self.visited += 1;

@@ -69,7 +69,10 @@ pub fn walk_statement(stmt: &Statement) -> Node {
         Statement::Insert(ins) => Node::with_children(
             format!("INSERT INTO {}", ins.table_name),
             NodeKind::Statement,
-            ins.source.as_ref().map(|q| vec![walk_query(q)]).unwrap_or_default(),
+            ins.source
+                .as_ref()
+                .map(|q| vec![walk_query(q)])
+                .unwrap_or_default(),
         ),
         Statement::Update { table, .. } => {
             Node::leaf(format!("UPDATE {}", table.relation), NodeKind::Statement)
@@ -78,22 +81,21 @@ pub fn walk_statement(stmt: &Statement) -> Node {
             format!("DELETE ({} targets)", del.tables.len()),
             NodeKind::Statement,
         ),
-        Statement::CreateTable(ct) => Node::leaf(
-            format!("CREATE TABLE {}", ct.name),
-            NodeKind::Statement,
-        ),
+        Statement::CreateTable(ct) => {
+            Node::leaf(format!("CREATE TABLE {}", ct.name), NodeKind::Statement)
+        }
         Statement::CreateView { name, query, .. } => Node::with_children(
             format!("CREATE VIEW {name}"),
             NodeKind::Statement,
             vec![walk_query(query)],
         ),
-        Statement::Merge { table, .. } => {
-            Node::leaf(format!("MERGE {table}"), NodeKind::Statement)
-        }
+        Statement::Merge { table, .. } => Node::leaf(format!("MERGE {table}"), NodeKind::Statement),
         Statement::AlterTable { name, .. } => {
             Node::leaf(format!("ALTER TABLE {name}"), NodeKind::Statement)
         }
-        Statement::Drop { object_type, names, .. } => Node::leaf(
+        Statement::Drop {
+            object_type, names, ..
+        } => Node::leaf(
             format!(
                 "DROP {:?} {}",
                 object_type,
@@ -133,7 +135,11 @@ fn walk_query(q: &Query) -> Node {
             })
             .collect();
         children.push(Node::with_children(
-            format!("WITH ({} CTE{})", ctes.len(), if ctes.len() == 1 { "" } else { "s" }),
+            format!(
+                "WITH ({} CTE{})",
+                ctes.len(),
+                if ctes.len() == 1 { "" } else { "s" }
+            ),
             NodeKind::Cte,
             ctes,
         ));
@@ -161,11 +167,9 @@ fn walk_set_expr(s: &SetExpr) -> Node {
             NodeKind::SetOp,
             vec![walk_set_expr(left), walk_set_expr(right)],
         ),
-        SetExpr::Query(inner) => Node::with_children(
-            "Subquery",
-            NodeKind::Subquery,
-            vec![walk_query(inner)],
-        ),
+        SetExpr::Query(inner) => {
+            Node::with_children("Subquery", NodeKind::Subquery, vec![walk_query(inner)])
+        }
         SetExpr::Values(values) => Node::leaf(
             format!("VALUES ({} rows)", values.rows.len()),
             NodeKind::Values,
@@ -183,7 +187,11 @@ fn walk_select(s: &Select) -> Node {
     if !s.from.is_empty() {
         let from_children: Vec<Node> = s.from.iter().map(walk_table_with_joins).collect();
         children.push(Node::with_children(
-            format!("FROM ({} source{})", s.from.len(), if s.from.len() == 1 { "" } else { "s" }),
+            format!(
+                "FROM ({} source{})",
+                s.from.len(),
+                if s.from.len() == 1 { "" } else { "s" }
+            ),
             NodeKind::From,
             from_children,
         ));
@@ -193,7 +201,10 @@ fn walk_select(s: &Select) -> Node {
     let proj_children: Vec<Node> = s.projection.iter().map(walk_select_item).collect();
     let proj_count = proj_children.len();
     children.push(Node::with_children(
-        format!("SELECT ({proj_count} col{})", if proj_count == 1 { "" } else { "s" }),
+        format!(
+            "SELECT ({proj_count} col{})",
+            if proj_count == 1 { "" } else { "s" }
+        ),
         NodeKind::Projection,
         proj_children,
     ));
@@ -209,7 +220,11 @@ fn walk_select(s: &Select) -> Node {
     match &s.group_by {
         GroupByExpr::Expressions(exprs, _) if !exprs.is_empty() => {
             let gb_children: Vec<Node> = exprs.iter().map(walk_expr).collect();
-            children.push(Node::with_children("GROUP BY", NodeKind::GroupBy, gb_children));
+            children.push(Node::with_children(
+                "GROUP BY",
+                NodeKind::GroupBy,
+                gb_children,
+            ));
         }
         GroupByExpr::All(_) => {
             children.push(Node::leaf("GROUP BY ALL", NodeKind::GroupBy));
@@ -247,7 +262,10 @@ fn walk_table_with_joins(twj: &TableWithJoins) -> Node {
     let mut kids = vec![walk_table_factor(&twj.relation)];
     for j in &twj.joins {
         kids.push(Node::with_children(
-            format!("{:?}", j.join_operator).chars().take(30).collect::<String>(),
+            format!("{:?}", j.join_operator)
+                .chars()
+                .take(30)
+                .collect::<String>(),
             NodeKind::Join,
             vec![walk_table_factor(&j.relation)],
         ));
@@ -268,7 +286,9 @@ fn walk_table_factor(f: &TableFactor) -> Node {
                 .unwrap_or_else(|| name.to_string());
             Node::leaf(label, NodeKind::Table)
         }
-        TableFactor::Derived { subquery, alias, .. } => {
+        TableFactor::Derived {
+            subquery, alias, ..
+        } => {
             let lbl = alias
                 .as_ref()
                 .map(|a| format!("Derived AS {}", a.name.value))
@@ -296,7 +316,11 @@ fn walk_order_by(exprs: &[OrderByExpr]) -> Node {
         })
         .collect();
     Node::with_children(
-        format!("ORDER BY ({} key{})", kids.len(), if kids.len() == 1 { "" } else { "s" }),
+        format!(
+            "ORDER BY ({} key{})",
+            kids.len(),
+            if kids.len() == 1 { "" } else { "s" }
+        ),
         NodeKind::OrderBy,
         kids,
     )
@@ -310,7 +334,11 @@ fn walk_expr(e: &Expr) -> Node {
     match e {
         Expr::Identifier(i) => Node::leaf(i.value.clone(), NodeKind::Expression),
         Expr::CompoundIdentifier(parts) => Node::leaf(
-            parts.iter().map(|i| i.value.as_str()).collect::<Vec<_>>().join("."),
+            parts
+                .iter()
+                .map(|i| i.value.as_str())
+                .collect::<Vec<_>>()
+                .join("."),
             NodeKind::Expression,
         ),
         Expr::Value(v) => Node::leaf(format!("{v}"), NodeKind::Expression),
@@ -319,11 +347,9 @@ fn walk_expr(e: &Expr) -> Node {
             NodeKind::Expression,
             vec![walk_expr(left), walk_expr(right)],
         ),
-        Expr::UnaryOp { op, expr } => Node::with_children(
-            format!("{op}"),
-            NodeKind::Expression,
-            vec![walk_expr(expr)],
-        ),
+        Expr::UnaryOp { op, expr } => {
+            Node::with_children(format!("{op}"), NodeKind::Expression, vec![walk_expr(expr)])
+        }
         Expr::Function(f) => {
             let kids: Vec<Node> = match &f.args {
                 sqlparser::ast::FunctionArguments::List(list) => list
@@ -340,12 +366,19 @@ fn walk_expr(e: &Expr) -> Node {
             };
             Node::with_children(format!("{}()", f.name), NodeKind::Expression, kids)
         }
-        Expr::Cast { expr, data_type, .. } => Node::with_children(
+        Expr::Cast {
+            expr, data_type, ..
+        } => Node::with_children(
             format!("CAST AS {data_type}"),
             NodeKind::Expression,
             vec![walk_expr(expr)],
         ),
-        Expr::Case { conditions, results, else_result, .. } => {
+        Expr::Case {
+            conditions,
+            results,
+            else_result,
+            ..
+        } => {
             let mut kids = Vec::new();
             for (c, r) in conditions.iter().zip(results.iter()) {
                 kids.push(Node::with_children(
@@ -363,21 +396,15 @@ fn walk_expr(e: &Expr) -> Node {
             }
             Node::with_children("CASE", NodeKind::Expression, kids)
         }
-        Expr::Subquery(q) => Node::with_children(
-            "Subquery",
-            NodeKind::Subquery,
-            vec![walk_query(q)],
-        ),
-        Expr::IsNull(inner) => Node::with_children(
-            "IS NULL",
-            NodeKind::Expression,
-            vec![walk_expr(inner)],
-        ),
-        Expr::IsNotNull(inner) => Node::with_children(
-            "IS NOT NULL",
-            NodeKind::Expression,
-            vec![walk_expr(inner)],
-        ),
+        Expr::Subquery(q) => {
+            Node::with_children("Subquery", NodeKind::Subquery, vec![walk_query(q)])
+        }
+        Expr::IsNull(inner) => {
+            Node::with_children("IS NULL", NodeKind::Expression, vec![walk_expr(inner)])
+        }
+        Expr::IsNotNull(inner) => {
+            Node::with_children("IS NOT NULL", NodeKind::Expression, vec![walk_expr(inner)])
+        }
         other => Node::leaf(summarize(other), NodeKind::Expression),
     }
 }
