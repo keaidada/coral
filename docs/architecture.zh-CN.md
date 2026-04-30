@@ -78,60 +78,60 @@ SQL 文本 -> sqlparser-rs AST -> AST rewrite -> 目标 SQL 文本
 
 ```mermaid
 flowchart LR
-  User[用户 / 脚本 / 浏览器] --> CLI[CLI: coral]
-  User --> UI[Next.js 前端]
-  User --> FFI[FFI / Python / C / Go / Node]
+  User["用户 / 脚本 / 浏览器"] --> CLI["CLI: coral"]
+  User --> UI["Next.js 前端"]
+  User --> FFI["FFI / Python / C / Go / Node"]
 
-  UI --> Service[coral-service\nAxum HTTP API]
-  CLI --> Core[coral-core\nSQL 翻译核心]
+  UI --> Service["coral-service<br/>Axum HTTP API"]
+  CLI --> Core["coral-core<br/>SQL 翻译核心"]
   Service --> Core
-  Service --> Viz[coral-viz\nDOT / PlantUML]
+  Service --> Viz["coral-viz<br/>DOT / PlantUML"]
   FFI --> Core
 
-  Core --> Parser[sqlparser-rs\nPostgreSQL Dialect]
-  Core --> Registry[函数注册表\nfunction_catalog]
-  Core --> Rewriter[AST rewrite passes]
-  Core --> Formatter[pretty / compact renderer]
+  Core --> Parser["sqlparser-rs<br/>PostgreSQL Dialect"]
+  Core --> Registry["函数注册表<br/>function_catalog"]
+  Core --> Rewriter["AST rewrite passes"]
+  Core --> Formatter["pretty / compact renderer"]
 
-  Schema[coral-schema\nAvro schema 推导] --> Core
-  Spark[coral-spark\nSpark view / plan helper] --> Core
-  Trino[coral-trino\nTrino facade] --> Core
-  HiveCatalog[coral-hive-catalog\n远程 Catalog 适配] --> Core
-  Incremental[coral-incremental\n增量改写] --> Parser
-  Pig[coral-pig\nPig Latin 输出] --> Parser
+  Schema["coral-schema<br/>Avro schema 推导"] --> Core
+  Spark["coral-spark<br/>Spark view / plan helper"] --> Core
+  Trino["coral-trino<br/>Trino facade"] --> Core
+  HiveCatalog["coral-hive-catalog<br/>远程 Catalog 适配"] --> Core
+  Incremental["coral-incremental<br/>增量改写"] --> Parser
+  Pig["coral-pig<br/>Pig Latin 输出"] --> Parser
 ```
 
 ## 4. 仓库结构
 
 ```mermaid
 flowchart TB
-  Root[仓库根目录]
+  Root["仓库根目录"]
 
-  Root --> Rust[coral-rust/]
-  Root --> Frontend[coral-service/frontend/]
-  Root --> Docs[docs/]
-  Root --> GitHub[.github/]
-  Root --> Readme[README.md / README.zh-CN.md]
+  Root --> Rust["coral-rust/"]
+  Root --> Frontend["coral-service/frontend/"]
+  Root --> Docs["docs/"]
+  Root --> GitHub[".github/"]
+  Root --> Readme["README.md / README.zh-CN.md"]
 
-  Rust --> Core[core/]
-  Rust --> CLI[cli/]
-  Rust --> Service[service/]
-  Rust --> FFI[ffi/]
-  Rust --> Python[python/]
-  Rust --> HiveCatalog[hive_catalog/]
-  Rust --> Trino[trino/]
-  Rust --> Schema[schema/]
-  Rust --> Spark[spark/]
-  Rust --> Viz[viz/]
-  Rust --> Incremental[incremental/]
-  Rust --> Pig[pig/]
-  Rust --> E2E[e2e/]
-  Rust --> Fuzz[fuzz/]
+  Rust --> Core["core/"]
+  Rust --> CLI["cli/"]
+  Rust --> Service["service/"]
+  Rust --> FFI["ffi/"]
+  Rust --> Python["python/"]
+  Rust --> HiveCatalog["hive_catalog/"]
+  Rust --> Trino["trino/"]
+  Rust --> Schema["schema/"]
+  Rust --> Spark["spark/"]
+  Rust --> Viz["viz/"]
+  Rust --> Incremental["incremental/"]
+  Rust --> Pig["pig/"]
+  Rust --> E2E["e2e/"]
+  Rust --> Fuzz["fuzz/"]
 
-  Frontend --> App[src/app/]
-  Frontend --> Components[src/app/components/]
-  Frontend --> Lib[src/app/lib/]
-  Frontend --> Package[package.json]
+  Frontend --> App["src/app/"]
+  Frontend --> Components["src/app/components/"]
+  Frontend --> Lib["src/app/lib/"]
+  Frontend --> Package["package.json"]
 ```
 
 ## 5. Rust workspace 模块职责
@@ -163,27 +163,27 @@ core, cli, ffi, hive_catalog, trino, service, schema, spark, viz, incremental, p
 
 ```mermaid
 flowchart BT
-  CLI[coral-cli] --> Core[coral-core]
-  Service[coral-service] --> Core
-  Service --> Trino[coral-trino]
-  Service --> Viz[coral-viz]
-  FFI[coral-ffi] --> Core
-  Python[coral-sql Python wrapper] --> FFI
-  HiveCatalog[coral-hive-catalog] --> Core
+  CLI["coral-cli"] --> Core["coral-core"]
+  Service["coral-service"] --> Core
+  Service --> Trino["coral-trino"]
+  Service --> Viz["coral-viz"]
+  FFI["coral-ffi"] --> Core
+  Python["coral-sql Python wrapper"] --> FFI
+  HiveCatalog["coral-hive-catalog"] --> Core
   Trino --> Core
-  Schema[coral-schema] --> Core
-  Spark[coral-spark] --> Core
+  Schema["coral-schema"] --> Core
+  Spark["coral-spark"] --> Core
   Spark --> Schema
-  E2E[coral-e2e] --> Core
+  E2E["coral-e2e"] --> Core
   E2E --> Service
   E2E --> Trino
   E2E --> Schema
   E2E --> Spark
   E2E --> Viz
-  E2E --> Incremental[coral-incremental]
-  E2E --> Pig[coral-pig]
+  E2E --> Incremental["coral-incremental"]
+  E2E --> Pig["coral-pig"]
 
-  Incremental --> SQLParser[sqlparser-rs]
+  Incremental --> SQLParser["sqlparser-rs"]
   Pig --> SQLParser
   Viz --> SQLParser
   Core --> SQLParser
@@ -195,30 +195,30 @@ flowchart BT
 
 ```mermaid
 flowchart TD
-  Input[输入 SQL 文本] --> Preprocess[文本预处理 preprocess]
+  Input["输入 SQL 文本"] --> Preprocess["文本预处理 preprocess"]
 
-  Preprocess --> ConnectBy[CONNECT BY / START WITH\n改写为 WITH RECURSIVE]
-  Preprocess --> OracleJoin[Oracle (+) 外连接\n改写为 LEFT JOIN]
+  Preprocess --> ConnectBy["CONNECT BY / START WITH<br/>改写为 WITH RECURSIVE"]
+  Preprocess --> OracleJoin["Oracle (+) 外连接<br/>改写为 LEFT JOIN"]
 
-  ConnectBy --> Parse[sqlparser-rs 解析\nPostgreSQLDialect]
+  ConnectBy --> Parse["sqlparser-rs 解析<br/>PostgreSQLDialect"]
   OracleJoin --> Parse
 
-  Parse --> AST[SQL AST]
-  AST --> UnknownFn[可选：未知函数检测\nunknown_functions]
-  AST --> Rewrite[AST rewrite passes]
+  Parse --> AST["SQL AST"]
+  AST --> UnknownFn["可选：未知函数检测<br/>unknown_functions"]
+  AST --> Rewrite["AST rewrite passes"]
 
-  Rewrite --> Structure[DISTINCT ON\n-> ROW_NUMBER 子查询]
-  Rewrite --> Functions[函数/运算符 rewrite\nNVL / DECODE / SUBSTR / MOD / regex]
-  Rewrite --> Types[类型 rewrite\nJSONB / UUID / BYTEA / TIMESTAMPTZ]
-  Rewrite --> Target{目标方言}
+  Rewrite --> Structure["DISTINCT ON<br/>-> ROW_NUMBER 子查询"]
+  Rewrite --> Functions["函数/运算符 rewrite<br/>NVL / DECODE / SUBSTR / MOD / regex"]
+  Rewrite --> Types["类型 rewrite<br/>JSONB / UUID / BYTEA / TIMESTAMPTZ"]
+  Rewrite --> Target{"目标方言"}
 
-  Target -->|Spark| SparkSQL[Spark SQL AST]
-  Target -->|Trino| TrinoDiff[叠加 Trino 函数/类型差异 rewrite]
-  TrinoDiff --> TrinoSQL[Trino SQL AST]
+  Target -->|Spark| SparkSQL["Spark SQL AST"]
+  Target -->|Trino| TrinoDiff["叠加 Trino 函数/类型差异 rewrite"]
+  TrinoDiff --> TrinoSQL["Trino SQL AST"]
 
-  SparkSQL --> Render[Display / pretty_print]
+  SparkSQL --> Render["Display / pretty_print"]
   TrinoSQL --> Render
-  Render --> Output[输出 SQL 文本]
+  Render --> Output["输出 SQL 文本"]
 ```
 
 ### 7.1 预处理层
@@ -246,14 +246,14 @@ coral-rust/core/src/rewrite/
 
 ```mermaid
 flowchart LR
-  AST[AST] --> S[structure::DistinctOnRewriter]
-  S --> F[functions::FunctionRewriter]
-  F --> T[types::TypeRewriter]
-  T --> D{target == Trino?}
-  D -->|否| SparkOut[Spark-compatible AST]
-  D -->|是| TF[trino_functions::TrinoFunctionRewriter]
-  TF --> TT[trino_types::TrinoTypeRewriter]
-  TT --> TrinoOut[Trino AST]
+  AST["AST"] --> S["structure::DistinctOnRewriter"]
+  S --> F["functions::FunctionRewriter"]
+  F --> T["types::TypeRewriter"]
+  T --> D{"target == Trino?"}
+  D -->|否| SparkOut["Spark-compatible AST"]
+  D -->|是| TF["trino_functions::TrinoFunctionRewriter"]
+  TF --> TT["trino_types::TrinoTypeRewriter"]
+  TT --> TrinoOut["Trino AST"]
 ```
 
 ### 7.3 函数注册表
@@ -297,13 +297,13 @@ coral
 
 ```mermaid
 flowchart LR
-  Stdin[stdin SQL] --> CLI[coral CLI]
-  File[--file query.sql] --> CLI
-  CLI --> ValidateArgs[解析 --source / --target / UDF 白名单]
-  ValidateArgs --> UnknownCheck[未知函数检测]
-  UnknownCheck -->|失败| Stderr[stderr 错误信息 + exit 1]
-  UnknownCheck -->|通过| Core[coral-core translate_to_with]
-  Core --> Stdout[stdout 输出 SQL + exit 0]
+  Stdin["stdin SQL"] --> CLI["coral CLI"]
+  File["--file query.sql"] --> CLI
+  CLI --> ValidateArgs["解析 --source / --target / UDF 白名单"]
+  ValidateArgs --> UnknownCheck["未知函数检测"]
+  UnknownCheck -->|失败| Stderr["stderr 错误信息 + exit 1"]
+  UnknownCheck -->|通过| Core["coral-core translate_to_with"]
+  Core --> Stdout["stdout 输出 SQL + exit 0"]
 ```
 
 ### 8.2 shell 集成约定
@@ -334,15 +334,15 @@ CLI 二进制不是“一次编译，到处运行”。而是：
 
 ```mermaid
 flowchart TB
-  Source[同一份 Rust 源码] --> MacArm[macOS arm64 二进制]
-  Source --> LinuxX86[Linux x86_64 musl 二进制]
-  Source --> LinuxArm[Linux arm64 musl 二进制]
-  Source --> Win[Windows x86_64 exe]
+  Source["同一份 Rust 源码"] --> MacArm["macOS arm64 二进制"]
+  Source --> LinuxX86["Linux x86_64 musl 二进制"]
+  Source --> LinuxArm["Linux arm64 musl 二进制"]
+  Source --> Win["Windows x86_64 exe"]
 
-  MacArm --> MacRuntime[macOS arm64 运行]
-  LinuxX86 --> LinuxX86Runtime[Linux x86_64 运行]
-  LinuxArm --> LinuxArmRuntime[Linux arm64 运行]
-  Win --> WinRuntime[Windows 运行]
+  MacArm --> MacRuntime["macOS arm64 运行"]
+  LinuxX86 --> LinuxX86Runtime["Linux x86_64 运行"]
+  LinuxArm --> LinuxArmRuntime["Linux arm64 运行"]
+  Win --> WinRuntime["Windows 运行"]
 ```
 
 已编译的对应平台二进制运行时不需要：
@@ -388,21 +388,21 @@ CORAL_BIND=127.0.0.1:9000 cargo run -p coral-service
 
 ```mermaid
 flowchart LR
-  Browser[前端 / HTTP 客户端] --> Service[coral-service]
+  Browser["前端 / HTTP 客户端"] --> Service["coral-service"]
 
-  Service --> Health[GET /api/health]
-  Service --> Translate[POST /api/translations/translate]
-  Service --> Validate[POST /api/translations/validate]
-  Service --> CatalogOps[POST /api/catalog-ops/execute]
-  Service --> GenGraph[POST /api/visualizations/generategraphs]
-  Service --> GetGraph[GET /api/visualizations/:id]
-  Service --> Functions[GET /api/functions]
+  Service --> Health["GET /api/health"]
+  Service --> Translate["POST /api/translations/translate"]
+  Service --> Validate["POST /api/translations/validate"]
+  Service --> CatalogOps["POST /api/catalog-ops/execute"]
+  Service --> GenGraph["POST /api/visualizations/generategraphs"]
+  Service --> GetGraph["GET /api/visualizations/:id"]
+  Service --> Functions["GET /api/functions"]
 
-  Translate --> Core[coral-core]
-  Validate --> Parser[sqlparser-rs]
-  GenGraph --> Viz[coral-viz]
-  GetGraph --> Cache[内存图源码缓存]
-  Functions --> Registry[function_catalog]
+  Translate --> Core["coral-core"]
+  Validate --> Parser["sqlparser-rs"]
+  GenGraph --> Viz["coral-viz"]
+  GetGraph --> Cache["内存图源码缓存"]
+  Functions --> Registry["function_catalog"]
 ```
 
 | 方法 | 路径 | 作用 |
@@ -477,21 +477,21 @@ coral-service/frontend/
 
 ```mermaid
 flowchart TB
-  App[Next.js App Router] --> Layout[app/layout.js]
-  Layout --> I18n[I18nProvider]
-  Layout --> Shell[Shell 布局]
+  App["Next.js App Router"] --> Layout["app/layout.js"]
+  Layout --> I18n["I18nProvider"]
+  Layout --> Shell["Shell 布局"]
 
-  Shell --> Sidebar[左侧导航]
-  Shell --> Topbar[顶部命令栏]
-  Shell --> RecentDrawer[右侧 Recent 抽屉]
-  Shell --> CommandPalette[命令面板]
+  Shell --> Sidebar["左侧导航"]
+  Shell --> Topbar["顶部命令栏"]
+  Shell --> RecentDrawer["右侧 Recent 抽屉"]
+  Shell --> CommandPalette["命令面板"]
 
-  Shell --> Translate[/ 翻译页]
-  Shell --> Validate[/validate 校验页]
-  Shell --> Visualize[/visualize 可视化页]
-  Shell --> Functions[/functions 函数表]
-  Shell --> History[/history 历史页]
-  Shell --> Settings[/settings 设置页]
+  Shell --> Translate["/ 翻译页"]
+  Shell --> Validate["/validate 校验页"]
+  Shell --> Visualize["/visualize 可视化页"]
+  Shell --> Functions["/functions 函数表"]
+  Shell --> History["/history 历史页"]
+  Shell --> Settings["/settings 设置页"]
 ```
 
 ### 10.2 前端模块职责
@@ -517,15 +517,15 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-  Editor[SqlEditor] --> Page[页面状态 React state]
-  Page --> Format[formatSql\nsql-formatter]
-  Page --> Fetch[fetch API]
-  Fetch --> Service[coral-service]
+  Editor["SqlEditor"] --> Page["页面状态 React state"]
+  Page --> Format["formatSql<br/>sql-formatter"]
+  Page --> Fetch["fetch API"]
+  Fetch --> Service["coral-service"]
   Service --> Page
-  Page --> Parse[parseTranslateBody]
-  Page --> History[localStorage coral.history.v1]
-  History --> Drawer[HistoryDrawer]
-  History --> HistoryPage[History page]
+  Page --> Parse["parseTranslateBody"]
+  Page --> History["localStorage coral.history.v1"]
+  History --> Drawer["HistoryDrawer"]
+  History --> HistoryPage["History page"]
   Drawer --> Page
 ```
 
@@ -533,18 +533,18 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  TranslateSuccess[翻译成功] --> AddHistory[addHistory]
-  AddHistory --> LocalStorage[localStorage\ncoral.history.v1]
-  LocalStorage --> Event[window event\ncoral:history-changed]
-  Event --> ShellCount[Shell 计数刷新]
-  Event --> DrawerRefresh[Recent Drawer 刷新]
-  Event --> HistoryRefresh[History Page 刷新]
+  TranslateSuccess["翻译成功"] --> AddHistory["addHistory"]
+  AddHistory --> LocalStorage["localStorage<br/>coral.history.v1"]
+  LocalStorage --> Event["window event<br/>coral:history-changed"]
+  Event --> ShellCount["Shell 计数刷新"]
+  Event --> DrawerRefresh["Recent Drawer 刷新"]
+  Event --> HistoryRefresh["History Page 刷新"]
 
-  DrawerClick[点击 Recent 记录] --> SamePage{当前在翻译页?}
-  SamePage -->|是| Dispatch[dispatch coral:load-history-entry]
-  SamePage -->|否| Session[写入 sessionStorage\ncoral.pending-history-entry]
-  Session --> Router[router.push('/')]
-  Dispatch --> Fill[回填 query/source/target/result]
+  DrawerClick["点击 Recent 记录"] --> SamePage{"当前在翻译页?"}
+  SamePage -->|是| Dispatch["dispatch coral:load-history-entry"]
+  SamePage -->|否| Session["写入 sessionStorage<br/>coral.pending-history-entry"]
+  Session --> Router["router.push('/')"]
+  Dispatch --> Fill["回填 query/source/target/result"]
   Router --> Fill
 ```
 
@@ -606,11 +606,11 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-  RustApp[Rust 应用] --> Core[coral-core]
-  CApp[C / C++ 应用] --> FFI[coral-ffi]
-  PythonApp[Python 应用] --> PyWrapper[coral-sql / ctypes]
-  GoApp[Go 应用] --> Cgo[cgo]
-  NodeApp[Node 应用] --> FFINapi[ffi-napi]
+  RustApp["Rust 应用"] --> Core["coral-core"]
+  CApp["C / C++ 应用"] --> FFI["coral-ffi"]
+  PythonApp["Python 应用"] --> PyWrapper["coral-sql / ctypes"]
+  GoApp["Go 应用"] --> Cgo["cgo"]
+  NodeApp["Node 应用"] --> FFINapi["ffi-napi"]
 
   PyWrapper --> FFI
   Cgo --> FFI
@@ -686,18 +686,18 @@ NEXT_PUBLIC_CORAL_SERVICE_API_URL=http://localhost:8080
 
 ```mermaid
 flowchart TB
-  Push[push / pull_request] --> RustJob[Rust workspace job]
-  Push --> FrontendJob[Frontend job]
+  Push["push / pull_request"] --> RustJob["Rust workspace job"]
+  Push --> FrontendJob["Frontend job"]
 
-  RustJob --> Fmt[cargo fmt --check]
-  RustJob --> Clippy[cargo clippy -D warnings]
-  RustJob --> Test[cargo test --workspace --all-targets]
-  RustJob --> Build[cargo build --release --workspace]
-  RustJob --> Smoke[cargo run --release --bin coral -- --smoke]
+  RustJob --> Fmt["cargo fmt --check"]
+  RustJob --> Clippy["cargo clippy -D warnings"]
+  RustJob --> Test["cargo test --workspace --all-targets"]
+  RustJob --> Build["cargo build --release --workspace"]
+  RustJob --> Smoke["cargo run --release --bin coral -- --smoke"]
 
-  FrontendJob --> NpmCi[npm ci]
-  FrontendJob --> Lint[npm run lint]
-  FrontendJob --> NextBuild[npm run build]
+  FrontendJob --> NpmCi["npm ci"]
+  FrontendJob --> Lint["npm run lint"]
+  FrontendJob --> NextBuild["npm run build"]
 ```
 
 注意：如果修改 `.github/workflows/ci.yml`，推送 GitHub 时需要 token 具备 `workflow` scope。
@@ -706,13 +706,13 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-  Core[coral-core] -->|返回 String / Result| Callers[调用方]
-  CLI[cli] -->|stdout / stderr / exit code| Shell[shell]
-  Service[service] -->|HTTP body / status code| Browser[浏览器]
-  FFI[ffi] -->|owned char*| CCaller[C ABI 调用方]
-  CCaller -->|必须调用| Free[coral_free_string]
-  Frontend[frontend] -->|localStorage| BrowserState[浏览器本地状态]
-  Viz[coral-viz] -->|DOT / PlantUML text| Renderer[GraphvizOnline / PlantUML]
+  Core["coral-core"] -->|返回 String / Result| Callers["调用方"]
+  CLI["cli"] -->|stdout / stderr / exit code| Shell["shell"]
+  Service["service"] -->|HTTP body / status code| Browser["浏览器"]
+  FFI["ffi"] -->|owned char*| CCaller["C ABI 调用方"]
+  CCaller -->|必须调用| Free["coral_free_string"]
+  Frontend["frontend"] -->|localStorage| BrowserState["浏览器本地状态"]
+  Viz["coral-viz"] -->|DOT / PlantUML text| Renderer["GraphvizOnline / PlantUML"]
 ```
 
 关键约束：
@@ -741,33 +741,38 @@ flowchart LR
 ## 15. 后续可改进方向
 
 ```mermaid
-mindmap
-  root((Coral Rust 后续方向))
-    CLI
-      批量目录转换
-      JSON 输出模式
-      规则覆盖报告
-      自动生成迁移 diff
-    Core
-      更多方言 source parser
-      更严格函数签名校验
-      Catalog-aware strict mode
-      更完整类型推导
-    Service
-      UDF 白名单参数透出
-      Catalog 接入真实 metastore
-      OpenAPI 文档
-      鉴权和审计日志
-    Frontend
-      UDF 白名单输入
-      批量 SQL 文件上传
-      可视化导出 SVG/PNG
-      历史记录导入导出
-    Release
-      GitHub Release 多平台产物
-      SHA256 校验文件
-      Homebrew / apt / rpm 分发
-      Docker 镜像
+flowchart TB
+  Root["Coral Rust 后续方向"]
+
+  Root --> CLI["CLI"]
+  CLI --> CLI1["批量目录转换"]
+  CLI --> CLI2["JSON 输出模式"]
+  CLI --> CLI3["规则覆盖报告"]
+  CLI --> CLI4["自动生成迁移 diff"]
+
+  Root --> Core["Core"]
+  Core --> Core1["更多方言 source parser"]
+  Core --> Core2["更严格函数签名校验"]
+  Core --> Core3["Catalog-aware strict mode"]
+  Core --> Core4["更完整类型推导"]
+
+  Root --> Service["Service"]
+  Service --> Service1["UDF 白名单参数透出"]
+  Service --> Service2["Catalog 接入真实 metastore"]
+  Service --> Service3["OpenAPI 文档"]
+  Service --> Service4["鉴权和审计日志"]
+
+  Root --> Frontend["Frontend"]
+  Frontend --> Frontend1["UDF 白名单输入"]
+  Frontend --> Frontend2["批量 SQL 文件上传"]
+  Frontend --> Frontend3["可视化导出 SVG/PNG"]
+  Frontend --> Frontend4["历史记录导入导出"]
+
+  Root --> Release["Release"]
+  Release --> Release1["GitHub Release 多平台产物"]
+  Release --> Release2["SHA256 校验文件"]
+  Release --> Release3["Homebrew / apt / rpm 分发"]
+  Release --> Release4["Docker 镜像"]
 ```
 
 ## 16. 一句话总结
