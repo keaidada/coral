@@ -272,6 +272,7 @@ dependencies = [
  "axum",
  "coral-core",
  "coral-trino",
+ "coral-viz",
  "serde",
  "serde_json",
  "sqlparser",
@@ -297,6 +298,14 @@ name = "coral-trino"
 version = "0.1.0"
 dependencies = [
  "coral-core",
+]
+
+[[package]]
+name = "coral-viz"
+version = "0.1.0"
+dependencies = [
+ "sqlparser",
+ "thiserror",
 ]
 
 [[package]]

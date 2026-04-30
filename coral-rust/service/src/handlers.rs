@@ -205,79 +205,21 @@ fn short_id() -> String {
 }
 
 fn render_dot(sql: &str) -> String {
-    use sqlparser::dialect::PostgreSqlDialect;
-    use sqlparser::parser::Parser;
-    let stmts = match Parser::parse_sql(&PostgreSqlDialect {}, sql) {
-        Ok(s) => s,
-        Err(e) => {
-            return format!(
-                "digraph coral_parse_error {{\n  node [shape=box]; err [label=\"{}\"];\n}}\n",
-                escape_dot(&e.to_string())
-            );
-        }
-    };
-    let mut out = String::from("digraph coral_ast {\n  rankdir=LR;\n");
-    out.push_str("  node [shape=box, fontname=\"Helvetica\"];\n");
-    for (i, stmt) in stmts.iter().enumerate() {
-        let label = summarize_statement(stmt);
-        out.push_str(&format!(
-            "  stmt{i} [label=\"{}\"];\n",
-            escape_dot(&label)
-        ));
-    }
-    for i in 1..stmts.len() {
-        out.push_str(&format!("  stmt{} -> stmt{};\n", i - 1, i));
-    }
-    out.push_str("}\n");
-    out
+    coral_viz::render(sql, coral_viz::Format::Dot).unwrap_or_else(|e| {
+        format!(
+            "digraph coral_parse_error {{\n  node [shape=box]; err [label=\"{}\"];\n}}\n",
+            escape_dot(&e.to_string())
+        )
+    })
 }
 
 fn render_plantuml(sql: &str) -> String {
-    use sqlparser::dialect::PostgreSqlDialect;
-    use sqlparser::parser::Parser;
-    let stmts = match Parser::parse_sql(&PostgreSqlDialect {}, sql) {
-        Ok(s) => s,
-        Err(e) => {
-            return format!(
-                "@startuml\nnote \"coral parse error: {}\"\n@enduml\n",
-                escape_plant(&e.to_string())
-            );
-        }
-    };
-    let mut out = String::from("@startuml\n");
-    for (i, stmt) in stmts.iter().enumerate() {
-        let label = summarize_statement(stmt);
-        out.push_str(&format!(
-            "rectangle \"#{i}: {}\" as stmt{i}\n",
-            escape_plant(&label)
-        ));
-    }
-    for i in 1..stmts.len() {
-        out.push_str(&format!("stmt{} --> stmt{}\n", i - 1, i));
-    }
-    out.push_str("@enduml\n");
-    out
-}
-
-fn summarize_statement(stmt: &sqlparser::ast::Statement) -> String {
-    // A one-line label for the AST node. Good enough for a graph; full
-    // tree rendering lives in Stage L (coral-viz).
-    use sqlparser::ast::Statement;
-    match stmt {
-        Statement::Query(_) => "SELECT / query".to_string(),
-        Statement::Insert(_) => "INSERT".to_string(),
-        Statement::Update { .. } => "UPDATE".to_string(),
-        Statement::Delete(_) => "DELETE".to_string(),
-        Statement::CreateTable(_) => "CREATE TABLE".to_string(),
-        Statement::CreateView { .. } => "CREATE VIEW".to_string(),
-        Statement::Drop { .. } => "DROP".to_string(),
-        Statement::AlterTable { .. } => "ALTER TABLE".to_string(),
-        Statement::Merge { .. } => "MERGE".to_string(),
-        _ => format!("{stmt}")
-            .chars()
-            .take(60)
-            .collect::<String>(),
-    }
+    coral_viz::render(sql, coral_viz::Format::PlantUml).unwrap_or_else(|e| {
+        format!(
+            "@startuml\nnote \"coral parse error: {}\"\n@enduml\n",
+            escape_plant(&e.to_string())
+        )
+    })
 }
 
 fn escape_dot(s: &str) -> String {

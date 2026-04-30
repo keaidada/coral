@@ -23,6 +23,7 @@ path = "src/lib.rs"
 [dependencies]
 coral-core = { path = "../core", version = "0.1.0" }
 coral-trino = { path = "../trino", version = "0.1.0" }
+coral-viz = { path = "../viz", version = "0.1.0" }
 sqlparser = { workspace = true }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
 axum = { version = "0.7", default-features = false, features = ["json", "tokio", "http1"] }

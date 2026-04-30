@@ -168,7 +168,7 @@ async fn visualize_generate_and_fetch_roundtrip() {
     let (_, v) = post_json_on(
         &app,
         "/api/visualizations/generategraphs",
-        json!({ "query": "SELECT 1; SELECT 2", "format": "dot" }),
+        json!({ "query": "SELECT a FROM t WHERE id > 10", "format": "dot" }),
     )
     .await;
     let id = v["graphId"].as_str().expect("graphId").to_string();
@@ -178,9 +178,14 @@ async fn visualize_generate_and_fetch_roundtrip() {
     assert_eq!(s, StatusCode::OK);
     let body = std::str::from_utf8(&bytes).unwrap();
     assert!(body.starts_with("digraph"), "{body}");
-    assert!(body.contains("stmt0"));
-    assert!(body.contains("stmt1"));
-    assert!(body.contains("stmt0 -> stmt1"));
+    // coral-viz walks the statement tree, so we should see semantic
+    // node labels from the walker — Query / Select / FROM / WHERE — and
+    // an edge between them.
+    assert!(body.contains("Query"), "{body}");
+    assert!(body.contains("Select"), "{body}");
+    assert!(body.contains("FROM"), "{body}");
+    assert!(body.contains("WHERE"), "{body}");
+    assert!(body.contains(" -> "), "{body}");
     let ct = ct.unwrap_or_default();
     assert!(ct.contains("graphviz") || ct.contains("text"), "{ct}");
 }
@@ -191,7 +196,7 @@ async fn visualize_plantuml_format() {
     let (_, v) = post_json_on(
         &app,
         "/api/visualizations/generategraphs",
-        json!({ "query": "SELECT 1", "format": "plantuml" }),
+        json!({ "query": "SELECT a FROM t", "format": "plantuml" }),
     )
     .await;
     let id = v["graphId"].as_str().unwrap().to_string();
@@ -199,6 +204,8 @@ async fn visualize_plantuml_format() {
     let body = std::str::from_utf8(&bytes).unwrap();
     assert!(body.contains("@startuml"), "{body}");
     assert!(body.contains("@enduml"), "{body}");
+    assert!(body.contains("rectangle"), "{body}");
+    assert!(body.contains("Select"), "{body}");
 }
 
 #[tokio::test]
