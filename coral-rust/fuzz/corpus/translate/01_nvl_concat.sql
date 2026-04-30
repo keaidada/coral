@@ -1,0 +1,1 @@
+WITH active_emp AS (SELECT id, name, dept_id, salary, mgr_id FROM employees WHERE salary > 0) SELECT d.name || ' / ' || NVL(e.name, 'n/a') FROM active_emp e LEFT JOIN departments d ON e.dept_id = d.id
