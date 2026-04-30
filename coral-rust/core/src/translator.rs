@@ -11,6 +11,7 @@ use sqlparser::ast::Statement;
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
 
+use crate::catalog::{validate_against, Catalog, ValidationIssue};
 use crate::error::Result;
 use crate::preprocess::preprocess;
 use crate::rewrite::apply_all;
@@ -65,4 +66,44 @@ fn render(statements: &[Statement]) -> String {
         .map(|s| s.to_string())
         .collect::<Vec<_>>()
         .join(";\n")
+}
+
+/// Result of a catalog-aware translation.
+///
+/// See [`translate_with_catalog`] for usage.
+#[derive(Debug, Clone)]
+pub struct CatalogTranslation {
+    /// Translated Spark SQL (same as what [`translate`] would return).
+    pub spark_sql: String,
+    /// Soft validation warnings from the catalog. Translation always
+    /// proceeds regardless; callers decide whether to log or escalate.
+    pub issues: Vec<ValidationIssue>,
+}
+
+/// Like [`translate`] but also validates references against `catalog`.
+///
+/// The returned [`CatalogTranslation`] holds both the Spark SQL and a list of
+/// soft [`ValidationIssue`]s (unknown tables / columns, with "did you mean?"
+/// suggestions). Issues do NOT fail translation — they are intended for
+/// logging or linting.
+pub fn translate_with_catalog<C: Catalog>(
+    gaussdb_sql: &str,
+    catalog: &C,
+) -> Result<CatalogTranslation> {
+    let preprocessed = preprocess(gaussdb_sql);
+    let dialect = PostgreSqlDialect {};
+    let mut statements = Parser::parse_sql(&dialect, &preprocessed)?;
+
+    let mut issues = vec![];
+    for stmt in statements.iter_mut() {
+        // Validate BEFORE rewriting so error messages refer to the user's
+        // original table/column names.
+        issues.extend(validate_against(stmt, catalog));
+        apply_all(stmt);
+    }
+
+    Ok(CatalogTranslation {
+        spark_sql: render(&statements),
+        issues,
+    })
 }
