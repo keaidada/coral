@@ -164,6 +164,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "coral-trino"
+version = "0.1.0"
+dependencies = [
+ "coral-core",
+]
+
+[[package]]
 name = "displaydoc"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

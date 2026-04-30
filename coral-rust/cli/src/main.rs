@@ -1,44 +1,60 @@
 // Copyright 2026 coral-rust contributors
 // Licensed under the BSD-2-Clause license.
 
-//! coral — GaussDB / openGauss SQL -> Spark SQL translator.
+//! coral — GaussDB / openGauss SQL → Spark / Trino SQL translator.
 //!
-//! Rust port of `coral-gaussdb-spark`'s `SmokeDemo` / `CoralGaussDBToSpark` CLI
-//! surface. Reads SQL from stdin (or `--file`) and prints Spark SQL to stdout.
+//! Rust port of `coral-gaussdb-spark`'s `SmokeDemo` /
+//! `CoralGaussDBToSpark` + `coral-trino`'s `HiveToTrinoConverter` CLI
+//! surfaces. Reads SQL from stdin (or `--file`) and prints the translated
+//! SQL to stdout.
 //!
 //! ```bash
 //! echo "SELECT NVL(x, 0) FROM t" | coral
-//! coral --file query.sql
-//! coral --smoke     # run the same 6 samples coral-gaussdb-spark's SmokeDemo does
+//! echo "SELECT RAND() FROM t"    | coral --target trino
+//! coral --file query.sql --target trino
+//! coral --smoke                  # 6 samples, Spark output (default)
+//! coral --smoke --target trino   # same 6 samples, Trino output
 //! ```
 
 use std::io::Read;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 
 #[derive(Parser, Debug)]
-#[command(name = "coral", version, about = "GaussDB -> Spark SQL translator")]
+#[command(
+    name = "coral",
+    version,
+    about = "GaussDB / Hive → Spark or Trino SQL translator"
+)]
 struct Cli {
     /// Path to a SQL file; when omitted, reads from stdin.
     #[arg(long, short)]
     file: Option<std::path::PathBuf>,
 
-    /// Run the built-in demo (the 6 samples from coral-gaussdb-spark SmokeDemo).
+    /// Run the built-in demo (the 6 samples from coral-gaussdb-spark's
+    /// SmokeDemo). Honors `--target`.
     #[arg(long)]
     smoke: bool,
 
-    /// Print the function coverage table (what Spark name each Hive/GaussDB
-    /// function maps to, plus Spark-native passthroughs).
+    /// Print the function coverage table (what Spark/Trino name each
+    /// Hive/GaussDB function maps to).
     #[arg(long)]
     list_functions: bool,
+
+    /// Output dialect: `spark` (default) or `trino`.
+    #[arg(long, default_value = "spark")]
+    target: String,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    let target = coral_core::Target::parse(&cli.target)
+        .with_context(|| format!("unknown --target {:?} (use 'spark' or 'trino')", cli.target))?;
+
     if cli.smoke {
-        return run_smoke();
+        return run_smoke(target);
     }
 
     if cli.list_functions {
@@ -58,8 +74,9 @@ fn main() -> Result<()> {
         }
     };
 
-    let spark = coral_core::translate(&input).context("translating GaussDB -> Spark")?;
-    println!("{}", spark);
+    let out = coral_core::translate_to(&input, target)
+        .with_context(|| format!("translating GaussDB → {target}"))?;
+    println!("{}", out);
     Ok(())
 }
 
@@ -124,16 +141,24 @@ fn format_category(c: coral_core::Category) -> &'static str {
     }
 }
 
-fn run_smoke() -> Result<()> {
+fn run_smoke(target: coral_core::Target) -> Result<()> {
+    println!("# target: {target}\n");
+    let mut any_error = false;
     for (i, sql) in SMOKE_SAMPLES.iter().enumerate() {
         println!("\n=============== sample #{} ===============", i + 1);
         println!("[GaussDB]\n  {}\n", sql.trim().replace('\n', "\n  "));
-        match coral_core::translate(sql) {
-            Ok(spark) => println!("[Spark]\n  {}", spark.replace('\n', "\n  ")),
-            Err(e) => println!("[ERROR] {}", e),
+        match coral_core::translate_to(sql, target) {
+            Ok(out) => println!("[{target}]\n  {}", out.replace('\n', "\n  ")),
+            Err(e) => {
+                println!("[ERROR] {}", e);
+                any_error = true;
+            }
         }
     }
     println!("\n=============== done ===============");
+    if any_error {
+        bail!("at least one sample failed to translate");
+    }
     Ok(())
 }
 

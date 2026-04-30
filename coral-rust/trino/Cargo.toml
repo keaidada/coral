@@ -1,0 +1,20 @@
+[package]
+name = "coral-trino"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+description = "Trino SQL output backend for coral-rust (GaussDB/Hive → Trino SQL translator)."
+
+[lib]
+name = "coral_trino"
+path = "src/lib.rs"
+
+[dependencies]
+coral-core = { path = "../core", version = "0.1.0" }
