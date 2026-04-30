@@ -12,7 +12,7 @@ use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
 
 use crate::error::Result;
-use crate::preprocess::rewrite_connect_by;
+use crate::preprocess::preprocess;
 use crate::rewrite::apply_all;
 
 /// Translate a single GaussDB / openGauss SQL statement to Spark SQL.
@@ -20,14 +20,16 @@ use crate::rewrite::apply_all;
 /// Pipeline:
 ///
 /// 1. **Text-level preprocessing** — rewrites Oracle-style
-///    `START WITH ... CONNECT BY` into `WITH RECURSIVE`, because
-///    `sqlparser-rs`'s PostgreSQL dialect does not parse that syntax directly.
+///    `START WITH ... CONNECT BY` into `WITH RECURSIVE`, and Oracle `(+)`
+///    outer-join markers into standard `LEFT JOIN`. Neither is supported by
+///    `sqlparser-rs`'s PostgreSQL dialect directly.
 /// 2. **Parse** with `sqlparser-rs`'s PostgreSQL dialect (GaussDB is
 ///    PostgreSQL-compatible).
-/// 3. **AST rewrites** — every pass in [`rewrite::apply_all`].
+/// 3. **AST rewrites** — every pass in [`rewrite::apply_all`] (DISTINCT ON,
+///    function registry, type mapping).
 /// 4. **Display** — emit via `Statement`'s `Display` impl.
 pub fn translate(gaussdb_sql: &str) -> Result<String> {
-    let preprocessed = rewrite_connect_by(gaussdb_sql);
+    let preprocessed = preprocess(gaussdb_sql);
     let dialect = PostgreSqlDialect {};
     let mut statements = Parser::parse_sql(&dialect, &preprocessed)?;
 
@@ -46,7 +48,7 @@ pub fn translate(gaussdb_sql: &str) -> Result<String> {
 ///
 /// Returns a Vec of the translated statements preserving input order.
 pub fn translate_all(gaussdb_sql: &str) -> Result<Vec<String>> {
-    let preprocessed = rewrite_connect_by(gaussdb_sql);
+    let preprocessed = preprocess(gaussdb_sql);
     let dialect = PostgreSqlDialect {};
     let mut statements = Parser::parse_sql(&dialect, &preprocessed)?;
 
