@@ -1,0 +1,40 @@
+[package]
+name = "coral-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+description = "HTTP service exposing the coral-rust translator — Rust port of Java coral-service."
+
+[[bin]]
+name = "coral-service"
+path = "src/main.rs"
+
+[lib]
+name = "coral_service"
+path = "src/lib.rs"
+
+[dependencies]
+coral-core = { path = "../core", version = "0.1.0" }
+coral-trino = { path = "../trino", version = "0.1.0" }
+sqlparser = { workspace = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
+axum = { version = "0.7", default-features = false, features = ["json", "tokio", "http1"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tower = { version = "0.4", features = ["util"] }
+serde_json = "1"
