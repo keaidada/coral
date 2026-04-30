@@ -17,6 +17,7 @@ use sqlparser::ast::{Statement, VisitMut};
 
 pub mod functions;
 pub mod structure;
+pub mod types;
 
 /// Run every rewrite pass against a single statement, in the order:
 ///
@@ -28,8 +29,15 @@ pub mod structure;
 ///
 /// 2. [`functions::FunctionRewriter`] — rewrites GaussDB-specific functions
 ///    and operators (NVL → COALESCE, DECODE → CASE, SUBSTR → SUBSTRING,
-///    MOD → %, ~ → RLIKE, ~* → LOWER(RLIKE LOWER)).
+///    MOD → %, ~ → RLIKE, ~* → LOWER(RLIKE LOWER)), plus date-format token
+///    translation inside TO_CHAR / TO_DATE / TO_TIMESTAMP.
+///
+/// 3. [`types::TypeRewriter`] — rewrites GaussDB-specific data types
+///    (JSON/JSONB/UUID/BYTEA/TIMESTAMPTZ/TEXT) inside CAST expressions and
+///    CREATE TABLE columns. Runs last so earlier passes that introduce new
+///    casts (the `::T` kind change in functions) get type-normalized too.
 pub fn apply_all(stmt: &mut Statement) {
     let _ = stmt.visit(&mut structure::DistinctOnRewriter);
     let _ = stmt.visit(&mut functions::FunctionRewriter);
+    let _ = stmt.visit(&mut types::TypeRewriter);
 }
