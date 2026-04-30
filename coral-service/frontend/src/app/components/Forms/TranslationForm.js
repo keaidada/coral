@@ -112,6 +112,7 @@ export default function TranslationForm({
                 <option value='hive'>Hive</option>
                 <option value='trino'>Trino</option>
                 <option value='spark'>Spark</option>
+                <option value='gaussdb'>GaussDB / openGauss</option>
               </select>
               <div> to </div>
               <select

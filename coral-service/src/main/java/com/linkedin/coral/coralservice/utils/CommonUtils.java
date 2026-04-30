@@ -9,6 +9,6 @@ public class CommonUtils {
 
   public static boolean isValidSourceLanguage(String sourceLanguage) {
     return sourceLanguage.equalsIgnoreCase("trino") || sourceLanguage.equalsIgnoreCase("hive")
-        || sourceLanguage.equalsIgnoreCase("spark");
+        || sourceLanguage.equalsIgnoreCase("spark") || sourceLanguage.equalsIgnoreCase("gaussdb");
   }
 }

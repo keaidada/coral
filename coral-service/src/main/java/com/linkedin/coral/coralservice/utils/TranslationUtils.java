@@ -7,6 +7,7 @@ package com.linkedin.coral.coralservice.utils;
 
 import org.apache.calcite.rel.RelNode;
 
+import com.linkedin.coral.gaussdb.spark.CoralGaussDBToSpark;
 import com.linkedin.coral.hive.hive2rel.HiveToRelConverter;
 import com.linkedin.coral.spark.CoralSpark;
 import com.linkedin.coral.trino.rel2trino.RelToTrinoConverter;
@@ -34,6 +35,16 @@ public class TranslationUtils {
     return coralSpark.getSparkSql();
   }
 
+  /**
+   * GaussDB / openGauss → Spark SQL. Uses {@link CoralGaussDBToSpark}, which
+   * internally falls back to SqlNode-level unparse for MERGE / recursive CTEs
+   * that Calcite 1.21 cannot rel-convert, so statements like {@code MERGE INTO}
+   * and {@code CONNECT BY} still return valid Spark SQL.
+   */
+  public static String translateGaussDBToSpark(String query) {
+    return CoralGaussDBToSpark.create(query, hiveMetastoreClient).getSparkSql();
+  }
+
   public static String translateQuery(String query, String sourceLanguage, String targetLanguage) {
     String translatedSql = null;
 
@@ -54,6 +65,15 @@ public class TranslationUtils {
       // To Trino
       else if (targetLanguage.equalsIgnoreCase("trino")) {
         translatedSql = translateHiveToTrino(query);
+      }
+    }
+    // From GaussDB / openGauss
+    else if (sourceLanguage.equalsIgnoreCase("gaussdb")) {
+      // Only Spark is supported as a target for GaussDB today (v1 of
+      // coral-gaussdb is one-way). Hive / Trino targets would need a
+      // coral-gaussdb-hive / coral-gaussdb-trino module.
+      if (targetLanguage.equalsIgnoreCase("spark")) {
+        translatedSql = translateGaussDBToSpark(query);
       }
     }
 

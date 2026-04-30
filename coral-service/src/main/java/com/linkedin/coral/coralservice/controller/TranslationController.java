@@ -45,8 +45,8 @@ public class TranslationController implements ApplicationListener<ContextRefresh
   @Value("${hivePropsLocation:}")
   private String hivePropsLocation;
 
-  private final static ImmutableMap<String, String> LANGUAGE_MAP =
-      ImmutableMap.of("hive", "Hive QL", "trino", "Trino SQL", "spark", "Spark SQL");
+  private final static ImmutableMap<String, String> LANGUAGE_MAP = ImmutableMap.of("hive", "Hive QL", "trino",
+      "Trino SQL", "spark", "Spark SQL", "gaussdb", "GaussDB / openGauss SQL");
 
   @Override
   public void onApplicationEvent(ContextRefreshedEvent event) {
@@ -73,7 +73,7 @@ public class TranslationController implements ApplicationListener<ContextRefresh
 
     if (!isValidSourceLanguage(sourceLanguage)) {
       return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-          .body("Currently, only Hive, Trino and Spark are supported as source languages.\n");
+          .body("Currently, only Hive, Trino, Spark and GaussDB are supported as source languages.\n");
     }
 
     String translatedSql = null;
@@ -104,7 +104,7 @@ public class TranslationController implements ApplicationListener<ContextRefresh
     if (translatedSql == null) {
       message = "Translation from " + LANGUAGE_MAP.get(sourceLanguage) + " to " + LANGUAGE_MAP.get(targetLanguage)
           + " is not currently supported."
-          + " Coral-Service only supports translation from Hive to Trino/Spark, or translation from Trino to Spark.\n";
+          + " Coral-Service supports: Hive → Trino/Spark, Trino → Spark, GaussDB → Spark.\n";
     } else {
       message = "Original query in " + LANGUAGE_MAP.get(sourceLanguage) + ":\n" + query + "\n" + "Translated to "
           + LANGUAGE_MAP.get(targetLanguage) + ":\n" + translatedSql + "\n";

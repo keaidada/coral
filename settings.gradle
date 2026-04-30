@@ -17,6 +17,8 @@ include 'coral-spark-plan'
 include 'coral-trino'
 include 'coral-service'
 include 'coral-visualization'
+include 'coral-gaussdb'
+include 'coral-gaussdb-spark'
 include 'shading'
 
 // Sub-modules: only include directories that have a build.gradle

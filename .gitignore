@@ -19,3 +19,10 @@ ligradle
 *.patch
 */metastore_db
 .pyc
+.gitnexus
+
+# Local Claude Code settings (personal, not for version control)
+.claude/settings.local.json
+
+# Local database / data directory (too large for git)
+db/
