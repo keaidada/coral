@@ -1,0 +1,134 @@
+# CI for coral-rust/ — a Rust port of coral-gaussdb + coral-gaussdb-spark.
+#
+# Runs on every push to the coral-rust branch and every PR that touches
+# coral-rust/**. Separate from the Java CI (ci.yml) so they don't block each
+# other. Skips entirely when the push/PR doesn't touch Rust files.
+
+name: coral-rust
+
+on:
+  push:
+    branches: ['coral-rust', 'master']
+    paths:
+      - 'coral-rust/**'
+      - '.github/workflows/coral-rust.yml'
+  pull_request:
+    branches: ['**']
+    paths:
+      - 'coral-rust/**'
+      - '.github/workflows/coral-rust.yml'
+
+defaults:
+  run:
+    working-directory: coral-rust
+
+concurrency:
+  group: coral-rust-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Workspace-wide lints; fail the build on warnings so drift is caught in PR.
+  RUSTFLAGS: '-D warnings'
+
+jobs:
+  test:
+    name: test / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust + clippy + rustfmt
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Cargo registry and build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: coral-rust
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy (all targets, all features)
+        run: cargo clippy --all-targets --workspace -- -D warnings
+
+      - name: cargo test
+        run: cargo test --workspace --all-targets
+
+      - name: cargo build (release, all crates)
+        run: cargo build --release --workspace
+
+      - name: Verify CLI smoke runs
+        run: cargo run --release --bin coral -- --smoke
+        shell: bash
+
+      # The ffi crate produces a cdylib; confirm it exists so Python/Go/C
+      # consumers have something to link against.
+      - name: Verify libcoral_ffi exists (unix)
+        if: runner.os != 'Windows'
+        run: |
+          ls -la target/release/
+          test -f target/release/libcoral_ffi.dylib \
+               -o -f target/release/libcoral_ffi.so
+        shell: bash
+
+      - name: Verify coral_ffi.dll exists (windows)
+        if: runner.os == 'Windows'
+        run: |
+          dir target\release\
+          if (-not (Test-Path target\release\coral_ffi.dll)) {
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Run Python binding smoke demo (unix)
+        if: runner.os != 'Windows'
+        run: python3 ffi/examples/python/smoke_demo.py
+        shell: bash
+
+      - name: Run Python binding smoke demo (windows)
+        if: runner.os == 'Windows'
+        run: python ffi\examples\python\smoke_demo.py
+        shell: cmd
+
+  # Extra job that ONLY runs on Linux: doc build + MSRV sanity check.
+  # Keeping these out of the matrix saves CI minutes and avoids duplicate
+  # flakes from the slower platforms.
+  extras:
+    name: extras / docs + msrv
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: coral-rust
+
+      # Ensure rustdoc builds cleanly. `cargo doc` fails on broken intra-doc
+      # links or missing code-block languages, which lib.rs prose sometimes
+      # picks up before rustc notices.
+      - name: cargo doc
+        run: cargo doc --workspace --no-deps --document-private-items
+        env:
+          RUSTDOCFLAGS: '-D warnings'
+
+      # MSRV check: try the version declared in workspace Cargo.toml
+      # (rust-version = "1.75"). Using dtolnay's `@stable` elsewhere means
+      # the main matrix tests against newest stable; this job pins the floor.
+      - name: Install Rust 1.75 (MSRV)
+        uses: dtolnay/rust-toolchain@1.75.0
+
+      - name: cargo check with MSRV
+        run: cargo check --workspace --all-targets
