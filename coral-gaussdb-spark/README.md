@@ -1,5 +1,7 @@
 # coral-gaussdb-spark
 
+> 🌐 Languages: **English** | [简体中文](README.zh-CN.md)
+
 End-to-end GaussDB / openGauss SQL → Spark SQL translator. Wraps
 [`coral-gaussdb`](../coral-gaussdb) (frontend) and
 [`coral-spark`](../coral-spark) (backend) into a one-liner.

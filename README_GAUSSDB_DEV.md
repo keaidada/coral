@@ -1,5 +1,7 @@
 # Coral coral-gaussdb Development: Documentation Index
 
+> 🌐 Languages: **English** | [简体中文](README_GAUSSDB_DEV.zh-CN.md)
+
 ## 📚 Three Key Documents
 
 This exploration generated **three comprehensive guides** to help you build the `coral-gaussdb` module:

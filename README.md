@@ -3,6 +3,8 @@
 [![CI](https://github.com/linkedin/coral/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/linkedin/coral/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/linkedin/coral?include_prereleases)](https://github.com/linkedin/coral/releases)
 
+> 🌐 Languages: **English** | [简体中文](README.zh-CN.md)
+
 <p align="center">
  <img src="docs/coral-logo.jpg" width="400" title="Coral Logo">
 </p>

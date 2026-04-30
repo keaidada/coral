@@ -1,5 +1,7 @@
 # coral-gaussdb
 
+> 🌐 Languages: **English** | [简体中文](README.zh-CN.md)
+
 GaussDB / openGauss SQL → Coral RelNode (Apache Calcite relational algebra) frontend.
 
 Mirrors the design of [`coral-trino`](../coral-trino): own ANTLR4 parser →
