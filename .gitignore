@@ -26,3 +26,7 @@ ligradle
 
 # Local database / data directory (too large for git)
 db/
+
+# Rust build artifacts (coral-rust/)
+target/
+**/*.rs.bk

@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = ["core", "cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "BSD-2-Clause"
+repository = "https://github.com/keaidada/coral"
+
+[workspace.dependencies]
+sqlparser = { version = "0.52", features = ["visitor"] }
+anyhow = "1"
+thiserror = "1"
+clap = { version = "4", features = ["derive"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

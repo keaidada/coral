@@ -1,0 +1,17 @@
+[package]
+name = "coral-cli"
+description = "Command-line GaussDB -> Spark SQL translator (Rust port of coral-gaussdb-spark SmokeDemo)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "coral"
+path = "src/main.rs"
+
+[dependencies]
+coral-core = { path = "../core" }
+clap = { workspace = true }
+anyhow = { workspace = true }
