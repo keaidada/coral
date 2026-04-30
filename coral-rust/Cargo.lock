@@ -254,6 +254,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "coral-schema"
+version = "0.1.0"
+dependencies = [
+ "coral-core",
+ "serde",
+ "serde_json",
+ "sqlparser",
+ "thiserror",
+]
+
+[[package]]
 name = "coral-service"
 version = "0.1.0"
 dependencies = [
