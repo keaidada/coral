@@ -20,17 +20,13 @@ fn assert_contains(input: &str, snippet: &str) {
 fn oracle_plus_rewrites_to_left_join() {
     let input = "SELECT a.x, b.y FROM a, b WHERE a.id = b.id(+)";
     let got = translate(input).unwrap();
-    assert!(
-        got.contains("LEFT JOIN b ON a.id = b.id"),
-        "got: {got}"
-    );
+    assert!(got.contains("LEFT JOIN b ON a.id = b.id"), "got: {got}");
     assert!(!got.contains("(+)"), "got: {got}");
 }
 
 #[test]
 fn oracle_plus_with_aliases() {
-    let input =
-        "SELECT e.name, d.name FROM employees e, departments d WHERE e.dept_id = d.id(+)";
+    let input = "SELECT e.name, d.name FROM employees e, departments d WHERE e.dept_id = d.id(+)";
     let got = translate(input).unwrap();
     assert!(
         got.contains("FROM employees AS e LEFT JOIN departments AS d ON e.dept_id = d.id"),
@@ -40,8 +36,7 @@ fn oracle_plus_with_aliases() {
 
 #[test]
 fn oracle_plus_with_extra_filter() {
-    let input =
-        "SELECT a.x FROM a, b WHERE a.id = b.id(+) AND a.flag = 'active'";
+    let input = "SELECT a.x FROM a, b WHERE a.id = b.id(+) AND a.flag = 'active'";
     let got = translate(input).unwrap();
     assert!(got.contains("LEFT JOIN b ON a.id = b.id"), "got: {got}");
     assert!(got.contains("WHERE a.flag = 'active'"), "got: {got}");
@@ -72,7 +67,8 @@ fn rows_between_preceding_frame() {
 
 #[test]
 fn range_between_unbounded_frame() {
-    let input = "SELECT SUM(x) OVER (ORDER BY ts RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t";
+    let input =
+        "SELECT SUM(x) OVER (ORDER BY ts RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t";
     assert_contains(input, "RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW");
 }
 

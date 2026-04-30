@@ -65,8 +65,7 @@ fn try_rewrite(input: &str) -> Option<String> {
     // Everything between FROM and START WITH is the table expression.
     let cols = input[select_pos + "SELECT".len()..from_pos].trim();
     let table_expr = input[from_pos + "FROM".len()..start_with_pos].trim();
-    let start_pred =
-        input[start_with_pos + "START WITH".len()..connect_by_pos].trim();
+    let start_pred = input[start_with_pos + "START WITH".len()..connect_by_pos].trim();
 
     // After CONNECT BY we expect `PRIOR <expr> = <expr>` optionally followed
     // by ORDER BY / GROUP BY etc. (which we don't currently propagate).
@@ -86,7 +85,10 @@ fn try_rewrite(input: &str) -> Option<String> {
         .split_whitespace()
         .take_while(|t| {
             let u = t.to_uppercase();
-            !matches!(u.as_str(), "ORDER" | "GROUP" | "LIMIT" | "OFFSET" | "HAVING")
+            !matches!(
+                u.as_str(),
+                "ORDER" | "GROUP" | "LIMIT" | "OFFSET" | "HAVING"
+            )
         })
         .collect::<Vec<_>>()
         .join(" ");

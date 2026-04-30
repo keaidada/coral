@@ -64,18 +64,12 @@ fn random_to_rand() {
 
 #[test]
 fn array_agg_to_collect_list() {
-    assert_contains(
-        "SELECT ARRAY_AGG(x) FROM t",
-        "COLLECT_LIST(x)",
-    );
+    assert_contains("SELECT ARRAY_AGG(x) FROM t", "COLLECT_LIST(x)");
 }
 
 #[test]
 fn generate_series_to_sequence() {
-    assert_contains(
-        "SELECT GENERATE_SERIES(1, 10) FROM t",
-        "SEQUENCE(1, 10)",
-    );
+    assert_contains("SELECT GENERATE_SERIES(1, 10) FROM t", "SEQUENCE(1, 10)");
     assert_contains(
         "SELECT GENERATE_SERIES(1, 10, 2) FROM t",
         "SEQUENCE(1, 10, 2)",
@@ -93,10 +87,7 @@ fn bool_and_bool_or() {
 #[test]
 fn position_swaps_and_renames() {
     // POSITION(needle, haystack) -> INSTR(haystack, needle)
-    assert_contains(
-        "SELECT POSITION('a', name) FROM t",
-        "INSTR(name, 'a')",
-    );
+    assert_contains("SELECT POSITION('a', name) FROM t", "INSTR(name, 'a')");
 }
 
 #[test]
@@ -211,6 +202,12 @@ fn nvl2_then_decode_in_same_select() {
     // Multiple rewrites in a single SELECT — post-order visitor should handle.
     let input = "SELECT NVL2(x, 'a', 'b'), DECODE(y, 1, 'one', 'other') FROM t";
     let got = translate(input).unwrap();
-    assert!(got.contains("CASE WHEN x IS NOT NULL THEN 'a' ELSE 'b' END"), "got: {got}");
-    assert!(got.contains("CASE WHEN y = 1 THEN 'one' ELSE 'other' END"), "got: {got}");
+    assert!(
+        got.contains("CASE WHEN x IS NOT NULL THEN 'a' ELSE 'b' END"),
+        "got: {got}"
+    );
+    assert!(
+        got.contains("CASE WHEN y = 1 THEN 'one' ELSE 'other' END"),
+        "got: {got}"
+    );
 }

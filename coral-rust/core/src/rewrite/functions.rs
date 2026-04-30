@@ -86,24 +86,37 @@ impl VisitorMut for FunctionRewriter {
 ///
 /// Mutates `f` in place for rename-only cases (SUBSTR -> SUBSTRING) to preserve
 /// the function's filter/over/within_group clauses without re-boxing.
+///
+/// Decision flow:
+///   1. Look up the function in `function_catalog::registry`. If it's not
+///      there, fall through to pass-through — safer than silently rewriting
+///      something we haven't vetted.
+///   2. For Rename(new) → just change the ObjectName.
+///   3. For CustomRewrite → dispatch to the appropriate helper below.
+///   4. For Passthrough / UnsupportedBySpark → no-op (Spark will handle or
+///      error out at runtime).
 fn rewrite_function(f: &mut Function) -> Option<Expr> {
     let name = function_name_lower(f);
+
+    // Drive from the registry when possible.
+    if let Some(entry) = crate::function_catalog::lookup(&name) {
+        match entry.disposition {
+            crate::function_catalog::Disposition::Passthrough
+            | crate::function_catalog::Disposition::UnsupportedBySpark => {
+                return None;
+            }
+            crate::function_catalog::Disposition::Rename(new_name) => {
+                f.name = ObjectName(vec![Ident::new(new_name)]);
+                return None;
+            }
+            crate::function_catalog::Disposition::CustomRewrite => {
+                // Fall through to the explicit dispatch below.
+            }
+        }
+    }
+
+    // CustomRewrite + legacy unregistered names: explicit dispatch.
     match name.as_str() {
-        // ---- no-op aggregates / window functions: leave as-is, documented
-        // here so future maintainers know they WERE considered.
-        "sum" | "avg" | "min" | "max" | "count" | "coalesce" | "row_number" | "rank"
-        | "dense_rank" => None,
-
-        // ---- drop-in renames
-        "nvl" => rename(f, "COALESCE"),
-        "random" => rename(f, "RAND"),
-        "array_agg" => rename(f, "COLLECT_LIST"),
-        "generate_series" => rename(f, "SEQUENCE"),
-        "bool_and" => rename(f, "EVERY"),
-        "bool_or" => rename(f, "SOME"),
-        "substr" => rename(f, "SUBSTRING"),
-
-        // ---- call-shape changes
         "nvl2" => rewrite_nvl2(f),
         "decode" => rewrite_decode(f),
         "mod" => rewrite_mod(f),
@@ -167,7 +180,11 @@ fn rewrite_decode(f: &mut Function) -> Option<Expr> {
         });
         results.push(v);
     }
-    let else_result = if has_default { Some(Box::new(it.next().unwrap())) } else { None };
+    let else_result = if has_default {
+        Some(Box::new(it.next().unwrap()))
+    } else {
+        None
+    };
 
     Some(Expr::Case {
         operand: None,
@@ -290,9 +307,8 @@ fn rewrite_date_format_arg(f: &mut Function) {
         return;
     }
     // Mutate arg[1] in place.
-    if let FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
-        Value::SingleQuotedString(s),
-    ))) = &mut list.args[1]
+    if let FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(Value::SingleQuotedString(s)))) =
+        &mut list.args[1]
     {
         if contains_date_format_token(s) {
             *s = translate_pg_date_format(s);
@@ -302,14 +318,12 @@ fn rewrite_date_format_arg(f: &mut Function) {
 
 // ---------- small helpers ----------
 
-fn rename(f: &mut Function, new_name: &str) -> Option<Expr> {
-    f.name = ObjectName(vec![Ident::new(new_name)]);
-    None
-}
-
 fn rlike(left: &Expr, right: &Expr, case_insensitive: bool) -> Expr {
     let (l, r) = if case_insensitive {
-        (call("LOWER", vec![left.clone()]), call("LOWER", vec![right.clone()]))
+        (
+            call("LOWER", vec![left.clone()]),
+            call("LOWER", vec![right.clone()]),
+        )
     } else {
         (left.clone(), right.clone())
     };

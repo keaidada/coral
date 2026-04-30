@@ -27,6 +27,11 @@ struct Cli {
     /// Run the built-in demo (the 6 samples from coral-gaussdb-spark SmokeDemo).
     #[arg(long)]
     smoke: bool,
+
+    /// Print the function coverage table (what Spark name each Hive/GaussDB
+    /// function maps to, plus Spark-native passthroughs).
+    #[arg(long)]
+    list_functions: bool,
 }
 
 fn main() -> Result<()> {
@@ -36,9 +41,14 @@ fn main() -> Result<()> {
         return run_smoke();
     }
 
+    if cli.list_functions {
+        return print_function_catalog();
+    }
+
     let input = match cli.file {
-        Some(path) => std::fs::read_to_string(&path)
-            .with_context(|| format!("reading {}", path.display()))?,
+        Some(path) => {
+            std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?
+        }
         None => {
             let mut buf = String::new();
             std::io::stdin()
@@ -51,6 +61,67 @@ fn main() -> Result<()> {
     let spark = coral_core::translate(&input).context("translating GaussDB -> Spark")?;
     println!("{}", spark);
     Ok(())
+}
+
+fn print_function_catalog() -> Result<()> {
+    use coral_core::{Disposition, FunctionEntry};
+
+    // Pull all entries, group by category for readability.
+    let mut by_cat: std::collections::BTreeMap<&str, Vec<FunctionEntry>> =
+        std::collections::BTreeMap::new();
+    for entry in coral_core::function_catalog::registry().values() {
+        by_cat
+            .entry(format_category(entry.category))
+            .or_default()
+            .push(*entry);
+    }
+
+    println!(
+        "coral-rust function coverage ({} entries)\n",
+        coral_core::function_catalog::registry().len()
+    );
+    println!("{:<24} {:<14} {:<6} NOTES", "NAME", "DISPOSITION", "CAT");
+    println!("{}", "-".repeat(90));
+
+    for (cat_label, mut entries) in by_cat {
+        entries.sort_by_key(|e| e.lower_name);
+        for e in entries {
+            let disp = match e.disposition {
+                Disposition::Passthrough => "passthrough".to_string(),
+                Disposition::Rename(n) => format!("=> {n}"),
+                Disposition::CustomRewrite => "custom".to_string(),
+                Disposition::UnsupportedBySpark => "UNSUPPORTED".to_string(),
+            };
+            println!(
+                "{:<24} {:<14} {:<6} {}",
+                e.lower_name, disp, cat_label, e.notes
+            );
+        }
+    }
+    Ok(())
+}
+
+fn format_category(c: coral_core::Category) -> &'static str {
+    use coral_core::Category::*;
+    match c {
+        Aggregate => "agg",
+        String => "str",
+        Math => "math",
+        DateTime => "date",
+        Collection => "coll",
+        Json => "json",
+        Hash => "hash",
+        Bitwise => "bit",
+        Window => "win",
+        Cast => "cast",
+        Null => "null",
+        Conditional => "cond",
+        Xpath => "xpath",
+        Udtf => "udtf",
+        Context => "ctx",
+        GaussDbSpecific => "gauss",
+        Misc => "misc",
+    }
 }
 
 fn run_smoke() -> Result<()> {

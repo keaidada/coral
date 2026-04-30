@@ -81,10 +81,7 @@ fn try_rewrite(input: &str) -> Option<String> {
 
     // Split predicates on top-level AND (case-insensitive). Bail if any
     // predicate is parenthesized — parentheses might change grouping.
-    let predicates = split_top_level_and(where_clause);
-    let Some(predicates) = predicates else {
-        return None;
-    };
+    let predicates = split_top_level_and(where_clause)?;
 
     // Find the predicate that carries the (+).
     let plus_idx = predicates.iter().position(|p| p.contains("(+)"))?;
@@ -132,13 +129,17 @@ fn try_rewrite(input: &str) -> Option<String> {
     let mut remaining: Vec<&str> = predicates
         .iter()
         .enumerate()
-        .filter_map(|(i, p)| if i == plus_idx { None } else { Some(p.as_str()) })
+        .filter_map(|(i, p)| {
+            if i == plus_idx {
+                None
+            } else {
+                Some(p.as_str())
+            }
+        })
         .collect();
 
     let select_clause = input[..from_pos].trim_end();
-    let tail = if let Some(after_where_end) =
-        input[where_pos..].find(';')
-    {
+    let tail = if let Some(after_where_end) = input[where_pos..].find(';') {
         &input[where_pos + after_where_end..]
     } else {
         ""
@@ -291,7 +292,10 @@ mod tests {
     fn plus_on_left_swaps_sides() {
         let sql = "SELECT a.x, b.y FROM a, b WHERE a.id(+) = b.id";
         let out = rewrite_oracle_outer_join(sql);
-        assert!(out.contains("FROM b LEFT JOIN a ON b.id = a.id"), "got: {out}");
+        assert!(
+            out.contains("FROM b LEFT JOIN a ON b.id = a.id"),
+            "got: {out}"
+        );
     }
 
     #[test]

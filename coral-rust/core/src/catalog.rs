@@ -88,11 +88,7 @@ impl InMemoryCatalog {
     pub fn from_pairs(entries: &[(&str, &str, &[&str])]) -> Self {
         let mut me = Self::new();
         for (db, table, cols) in entries {
-            me.add_table(
-                db,
-                table,
-                cols.iter().map(|s| s.to_string()).collect(),
-            );
+            me.add_table(db, table, cols.iter().map(|s| s.to_string()).collect());
         }
         me
     }
@@ -111,10 +107,13 @@ impl InMemoryCatalog {
                 (col, ty)
             })
             .unzip();
-        self.tables
-            .entry(db_key)
-            .or_default()
-            .insert(table_key, TableSchema { columns, column_types });
+        self.tables.entry(db_key).or_default().insert(
+            table_key,
+            TableSchema {
+                columns,
+                column_types,
+            },
+        );
     }
 
     /// Look up a table and return its original (case-preserved) column names.
@@ -209,7 +208,12 @@ impl<C: Catalog> VisitorMut for Validator<'_, C> {
         let cte_added: Vec<String> = query
             .with
             .as_ref()
-            .map(|w| w.cte_tables.iter().map(|c| c.alias.name.value.clone()).collect())
+            .map(|w| {
+                w.cte_tables
+                    .iter()
+                    .map(|c| c.alias.name.value.clone())
+                    .collect()
+            })
             .unwrap_or_default();
         let added_count = cte_added.len();
         self.cte_names.extend(cte_added);
@@ -254,9 +258,7 @@ impl<C: Catalog> VisitorMut for Validator<'_, C> {
 
 impl<C: Catalog> Validator<'_, C> {
     fn is_cte(&self, name: &str) -> bool {
-        self.cte_names
-            .iter()
-            .any(|c| c.eq_ignore_ascii_case(name))
+        self.cte_names.iter().any(|c| c.eq_ignore_ascii_case(name))
     }
 
     fn check_qualified(&mut self, qualifier: &Ident, col: &Ident) {
@@ -355,9 +357,7 @@ fn lev(a: &str, b: &str) -> usize {
             } else {
                 1
             };
-            curr[j] = (curr[j - 1] + 1)
-                .min(prev[j] + 1)
-                .min(prev[j - 1] + cost);
+            curr[j] = (curr[j - 1] + 1).min(prev[j] + 1).min(prev[j - 1] + cost);
         }
         std::mem::swap(&mut prev, &mut curr);
     }
@@ -386,12 +386,18 @@ mod tests {
     use sqlparser::parser::Parser;
 
     fn parse(sql: &str) -> sqlparser::ast::Statement {
-        Parser::parse_sql(&PostgreSqlDialect {}, sql).unwrap().remove(0)
+        Parser::parse_sql(&PostgreSqlDialect {}, sql)
+            .unwrap()
+            .remove(0)
     }
 
     fn sample_catalog() -> InMemoryCatalog {
         InMemoryCatalog::from_pairs(&[
-            ("default", "employees", &["id|int", "name|string", "dept_id|int"]),
+            (
+                "default",
+                "employees",
+                &["id|int", "name|string", "dept_id|int"],
+            ),
             ("default", "departments", &["id|int", "name|string"]),
         ])
     }

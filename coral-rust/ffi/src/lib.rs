@@ -197,7 +197,11 @@ mod tests {
         let _ = to_string(out);
         // Success path cleared the thread-local error.
         let p = coral_last_error();
-        assert!(p.is_null(), "expected cleared error, got: {}", error_string());
+        assert!(
+            p.is_null(),
+            "expected cleared error, got: {}",
+            error_string()
+        );
     }
 
     #[test]

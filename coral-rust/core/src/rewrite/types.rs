@@ -135,7 +135,10 @@ pub fn rewrite_type(ty: &mut DataType) {
 /// no `STRING` variant). Using `Custom("STRING")` keeps the display output
 /// literally `STRING`, matching what Spark emits natively.
 fn spark_string() -> DataType {
-    DataType::Custom(ObjectName(vec![sqlparser::ast::Ident::new("STRING")]), vec![])
+    DataType::Custom(
+        ObjectName(vec![sqlparser::ast::Ident::new("STRING")]),
+        vec![],
+    )
 }
 
 fn object_name_last_lower(name: &ObjectName) -> String {

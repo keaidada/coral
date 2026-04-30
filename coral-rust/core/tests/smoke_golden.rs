@@ -171,10 +171,7 @@ fn now_to_current_timestamp() {
 fn nested_nvl_rewrites_both_levels() {
     let input = "SELECT NVL(NVL(a, b), c) FROM t";
     let got = translate(input).unwrap();
-    assert!(
-        got.contains("COALESCE(COALESCE(a, b), c)"),
-        "got: {got}"
-    );
+    assert!(got.contains("COALESCE(COALESCE(a, b), c)"), "got: {got}");
 }
 
 #[test]

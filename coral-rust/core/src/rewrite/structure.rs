@@ -30,8 +30,8 @@
 
 use sqlparser::ast::{
     Distinct, Expr, Function, FunctionArgumentList, FunctionArguments, Ident, ObjectName,
-    OrderByExpr, Query, Select, SelectItem, SetExpr, TableAlias, TableFactor,
-    TableWithJoins, Value, VisitorMut, WindowSpec, WindowType,
+    OrderByExpr, Query, Select, SelectItem, SetExpr, TableAlias, TableFactor, TableWithJoins,
+    Value, VisitorMut, WindowSpec, WindowType,
 };
 use std::ops::ControlFlow;
 
@@ -195,10 +195,12 @@ fn row_number_over(partition_by: Vec<Expr>, order_by: Vec<OrderByExpr>) -> Expr 
 fn strip_row_number(inner: &[SelectItem]) -> Vec<SelectItem> {
     inner
         .iter()
-        .take_while(|item| !matches!(
-            item,
-            SelectItem::ExprWithAlias { alias, .. } if alias.value == RN_COLUMN
-        ))
+        .take_while(|item| {
+            !matches!(
+                item,
+                SelectItem::ExprWithAlias { alias, .. } if alias.value == RN_COLUMN
+            )
+        })
         .map(|item| match item {
             SelectItem::UnnamedExpr(Expr::Identifier(id)) => {
                 // Bare identifier: re-project by the same name.

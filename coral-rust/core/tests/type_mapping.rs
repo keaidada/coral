@@ -70,18 +70,12 @@ fn cast_float4_to_real() {
 
 #[test]
 fn create_table_json_column_to_string() {
-    assert_contains(
-        "CREATE TABLE events (id BIGINT, payload JSONB)",
-        "STRING",
-    );
+    assert_contains("CREATE TABLE events (id BIGINT, payload JSONB)", "STRING");
 }
 
 #[test]
 fn create_table_uuid_and_bytea() {
-    let got = translate(
-        "CREATE TABLE files (id UUID, checksum BYTEA, body TEXT)",
-    )
-    .unwrap();
+    let got = translate("CREATE TABLE files (id UUID, checksum BYTEA, body TEXT)").unwrap();
     assert!(got.contains("STRING"), "got: {got}"); // from UUID and TEXT
     assert!(got.contains("BINARY"), "got: {got}"); // from BYTEA
 }
@@ -89,12 +83,11 @@ fn create_table_uuid_and_bytea() {
 #[test]
 fn create_table_timestamptz_column() {
     // TIMESTAMPTZ column -> TIMESTAMP
-    let got = translate(
-        "CREATE TABLE events (id BIGINT, created_at TIMESTAMPTZ)",
-    )
-    .unwrap();
+    let got = translate("CREATE TABLE events (id BIGINT, created_at TIMESTAMPTZ)").unwrap();
     assert!(
-        got.contains("TIMESTAMP") && !got.contains("TIMESTAMPTZ") && !got.contains("WITH TIME ZONE"),
+        got.contains("TIMESTAMP")
+            && !got.contains("TIMESTAMPTZ")
+            && !got.contains("WITH TIME ZONE"),
         "got: {got}"
     );
 }
@@ -102,10 +95,8 @@ fn create_table_timestamptz_column() {
 #[test]
 fn create_table_serial_columns() {
     // SERIAL / BIGSERIAL are Custom types — confirm the fold to INT / BIGINT.
-    let got = translate(
-        "CREATE TABLE things (id SERIAL, big_id BIGSERIAL, small_id SMALLSERIAL)",
-    )
-    .unwrap();
+    let got = translate("CREATE TABLE things (id SERIAL, big_id BIGSERIAL, small_id SMALLSERIAL)")
+        .unwrap();
     assert!(got.contains("INT"), "got: {got}");
     assert!(got.contains("BIGINT"), "got: {got}");
     assert!(got.contains("SMALLINT"), "got: {got}");
@@ -121,7 +112,10 @@ fn common_types_passthrough() {
     assert_contains("SELECT x::INT FROM t", "CAST(x AS INT)");
     assert_contains("SELECT x::BIGINT FROM t", "CAST(x AS BIGINT)");
     assert_contains("SELECT x::VARCHAR(10) FROM t", "CAST(x AS VARCHAR(10))");
-    assert_contains("SELECT x::DECIMAL(18, 2) FROM t", "CAST(x AS DECIMAL(18,2))");
+    assert_contains(
+        "SELECT x::DECIMAL(18, 2) FROM t",
+        "CAST(x AS DECIMAL(18,2))",
+    );
     assert_contains("SELECT x::DOUBLE FROM t", "CAST(x AS DOUBLE)");
     assert_contains("SELECT x::BOOLEAN FROM t", "CAST(x AS BOOLEAN)");
     assert_contains("SELECT x::DATE FROM t", "CAST(x AS DATE)");

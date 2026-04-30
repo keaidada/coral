@@ -15,10 +15,12 @@
 pub mod catalog;
 pub mod date_format;
 pub mod error;
+pub mod function_catalog;
 pub mod preprocess;
 pub mod rewrite;
 pub mod translator;
 
 pub use catalog::{Catalog, InMemoryCatalog, ValidationIssue};
 pub use error::{CoralError, Result};
+pub use function_catalog::{Category, Disposition, FunctionEntry};
 pub use translator::{translate, translate_all, translate_with_catalog};
