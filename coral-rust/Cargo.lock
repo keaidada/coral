@@ -254,6 +254,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "coral-incremental"
+version = "0.1.0"
+dependencies = [
+ "sqlparser",
+ "thiserror",
+]
+
+[[package]]
 name = "coral-schema"
 version = "0.1.0"
 dependencies = [

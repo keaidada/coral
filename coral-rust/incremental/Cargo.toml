@@ -1,0 +1,21 @@
+[package]
+name = "coral-incremental"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+description = "Incremental materialized-view query rewriter (Rust port of Java coral-incremental)."
+
+[lib]
+name = "coral_incremental"
+path = "src/lib.rs"
+
+[dependencies]
+sqlparser = { workspace = true }
+thiserror = { workspace = true }
