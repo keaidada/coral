@@ -11,7 +11,7 @@
 
 **Coral** 是一款 SQL 翻译、分析与重写引擎。它构建了一个标准的中间表示 —— **Coral IR**，用于在不依赖任何具体 SQL 方言的前提下刻画关系代数表达式的语义。Coral IR 提供两种形式：一种位于抽象语法树（AST）层，另一种位于逻辑计划层。两种形式是同构的，可以相互转换。
 
-Coral 对外暴露 API，支持 SQL 方言与 Coral IR 之间的双向转换。目前，Coral 支持将 HiveQL 和 Spark SQL 转换为 Coral IR，并支持将 Coral IR 转换为 HiveQL、Spark SQL 和 Trino SQL。借助多种 SQL 方言的支持，Coral 可以将某一种方言编写的 SQL 语句或视图定义翻译为另一方言的等价形式，也可以在不同计算引擎和基于 SQL 的数据源之间充当桥梁。方言转换的示例可参考 [coral-hive](coral-hive)、[coral-spark](coral-spark) 和 [coral-trino](coral-trino) 模块。
+Coral 对外暴露 API，支持 SQL 方言与 Coral IR 之间的双向转换。目前，Coral 支持将 HiveQL、Spark SQL 以及 GaussDB / openGauss SQL 转换为 Coral IR，并支持将 Coral IR 转换为 HiveQL、Spark SQL 和 Trino SQL。借助多种 SQL 方言的支持，Coral 可以将某一种方言编写的 SQL 语句或视图定义翻译为另一方言的等价形式，也可以在不同计算引擎和基于 SQL 的数据源之间充当桥梁。方言转换的示例可参考 [coral-hive](coral-hive)、[coral-spark](coral-spark)、[coral-trino](coral-trino)、[coral-gaussdb](coral-gaussdb) 和 [coral-gaussdb-spark](coral-gaussdb-spark) 模块。
 
 Coral 同时对外暴露用于 Coral IR 重写与变换的 API，包括将 Coral IR 表达式重写为语义等价但性能更优的表达式。例如，Coral 可以通过把视图定义重写为增量形式来实现增量视图维护，详见 [coral-incremental](coral-incremental) 模块。Coral 的其他重写应用还包括数据治理和策略实施。
 
@@ -28,6 +28,8 @@ Coral 既可以作为库集成到其他项目中，也可以作为独立服务�
 - **Coral-Hive**：将 HiveQL 转换为 Coral IR（通常也可用于 Spark SQL）。
 - **Coral-Trino**：将 Coral IR 转换为 Trino SQL，Trino SQL 到 Coral IR 的转换仍在开发中。
 - **Coral-Spark**：将 Coral IR 转换为 Spark SQL（通常也可用于 HiveQL）。
+- **Coral-GaussDB**：将 GaussDB / openGauss SQL 转换为 Coral IR。PostgreSQL 兼容前端，自带 ANTLR4 语法、PG 的 `::` 类型转换、`||` 拼接、`NVL/NVL2`、`DECODE`、`CONNECT BY`、窗口函数以及约 30 个函数映射。详见 [coral-gaussdb](coral-gaussdb)。
+- **Coral-GaussDB-Spark**：端到端 GaussDB → Spark SQL 翻译器，将 `coral-gaussdb`（前端）和 `coral-spark`（后端）封装为一行式调用。详见 [coral-gaussdb-spark](coral-gaussdb-spark)。
 - **Coral-Dbt**：将 Coral 集成到 DBT 中，支持在 DBT 模型上应用 Coral 的变换能力。
 - **Coral-Incremental**：从输入 SQL 推导出增量查询，用于增量视图维护。
 - **Coral-Schema**：根据视图的逻辑计划及基础表的 Avro Schema，推导出视图的 Avro Schema。
@@ -48,6 +50,63 @@ Coral 既可以作为库集成到其他项目中，也可以作为独立服务�
 次版本升级同样会引入不向后兼容的变更，例如删除或重命名方法。
 
 请务必仔细阅读每次版本升级配套的发布说明与迁移文档，以了解具体变化和推荐的迁移步骤。
+
+
+## GaussDB / openGauss 支持
+
+本分支为 Coral 新增了对 **GaussDB / openGauss SQL** 的一等支持，引入了一个新的前端方言。两个模块协同，实现到 Spark SQL 的端到端翻译：
+
+- [`coral-gaussdb`](coral-gaussdb) —— GaussDB SQL → Coral RelNode IR。自带 ANTLR4 语法和 `ParseTreeBuilder`，复用上游 Coral 的 `HiveSqlValidator` 与 `DaliOperatorTable`。
+- [`coral-gaussdb-spark`](coral-gaussdb-spark) —— 端到端 GaussDB SQL → Spark SQL。将上述前端与 [`coral-spark`](coral-spark) 后端封装起来。
+
+### 快速开始
+
+```java
+import com.linkedin.coral.gaussdb.spark.CoralGaussDBToSpark;
+import java.util.*;
+
+Map<String, Map<String, List<String>>> catalog = new HashMap<>();
+catalog.put("default", Collections.singletonMap(
+    "employees", Arrays.asList("id|int", "dept_id|int", "name|string", "salary|double")));
+
+String sparkSql = CoralGaussDBToSpark.createLocal(
+    "SELECT dept_id, COUNT(*) FROM employees GROUP BY dept_id HAVING COUNT(*) > 1",
+    catalog
+).getSparkSql();
+```
+
+### 覆盖范围亮点
+
+| 输入（GaussDB） | 输出（Spark） |
+|---|---|
+| `a \|\| b` | `concat(a, b)` |
+| `x::INT` | `CAST(x AS INT)` |
+| `NVL(a, b)` / `NVL2(a, b, c)` | `COALESCE` / `CASE` 展开 |
+| `DECODE(x, k1, v1, ..., d)` | `CASE WHEN ... END` |
+| `STRING_AGG(x, sep)` | `concat_ws(sep, collect_list(x))` |
+| `ARRAY_AGG(x)` | `collect_list(x)` |
+| `REGEXP_SUBSTR(s, p)` | `regexp_extract(s, p, 0)` |
+| `MOD(a, b)` | `a % b` |
+| `START WITH ... CONNECT BY ...` | 重写为 `WITH RECURSIVE` |
+
+完整的规则 / 测试 / 状态对照表：[`coral-gaussdb/docs/GRAMMAR_COVERAGE.md`](coral-gaussdb/docs/GRAMMAR_COVERAGE.md)。
+
+### 设计文档
+
+本次 GaussDB 支持基于以下 4 份设计文档推进：
+
+- [`README_GAUSSDB_DEV.md`](README_GAUSSDB_DEV.md) —— 入门与文档总索引
+- [`QUICK_REFERENCE.md`](QUICK_REFERENCE.md) —— 文件路径速查、关键入口、必须重写的方法、调试技巧
+- [`CORAL_ARCHITECTURE_ANALYSIS.md`](CORAL_ARCHITECTURE_ANALYSIS.md) —— Coral 整体设计（模块布局、基类、Calcite 集成）
+- [`CORAL_GAUSSDB_TEMPLATE.md`](CORAL_GAUSSDB_TEMPLATE.md) —— 分阶段实现模板，含代码骨架
+- [`GAUSSDB_DESIGN.md`](GAUSSDB_DESIGN.md) —— 本分支确定落地的设计方案
+
+### 运行测试
+
+```bash
+./gradlew :coral-gaussdb:test           # 前端
+./gradlew :coral-gaussdb-spark:test     # 端到端
+```
 
 
 ## 如何构建
@@ -243,3 +302,4 @@ FROM "db1"."airport"
 3. Trino → Spark
    注意：Trino → Spark 翻译时，查询中引用的视图被视为以 HiveQL 定义，因此目前无法翻译定义在 Trino 中的视图。当前仅支持在 Trino 查询中引用基础表。该翻译路径目前仍处于 POC 阶段，后续仍需进一步完善。
 4. Spark → Trino
+5. **GaussDB / openGauss → Spark** —— 由 [`coral-gaussdb-spark`](coral-gaussdb-spark) 提供，封装 `coral-gaussdb`（前端）和 `coral-spark`（后端）。支持的语法与函数映射详见 [覆盖情况](coral-gaussdb/docs/GRAMMAR_COVERAGE.md)。

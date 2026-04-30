@@ -15,11 +15,12 @@ is defined in two forms: one is the at the abstract syntax tree (AST) layer, and
 Both forms are isomorphic and convertible to each other.
 
 Coral exposes APIs for implementing conversions between SQL dialects and Coral IR in both directions.
-Currently, Coral supports converting HiveQL and Spark SQL to Coral IR, and converting Coral IR to HiveQL, Spark SQL,
-and Trino SQL. With multiple SQL dialects supported, Coral can be used to translate SQL statements and views defined in
-one dialect to equivalent ones in another dialect. It can also be used to interoperate between engines and SQL-powered 
-data sources. For dialect conversion examples, see the modules [coral-hive](coral-hive), [coral-spark](coral-spark), 
-and [coral-trino](coral-trino).
+Currently, Coral supports converting HiveQL, Spark SQL, and GaussDB / openGauss SQL to Coral IR, and converting
+Coral IR to HiveQL, Spark SQL, and Trino SQL. With multiple SQL dialects supported, Coral can be used to translate
+SQL statements and views defined in one dialect to equivalent ones in another dialect. It can also be used to
+interoperate between engines and SQL-powered data sources. For dialect conversion examples, see the modules
+[coral-hive](coral-hive), [coral-spark](coral-spark), [coral-trino](coral-trino), [coral-gaussdb](coral-gaussdb),
+and [coral-gaussdb-spark](coral-gaussdb-spark).
 
 Coral also exposes APIs for Coral IR rewrite and manipulation. This includes rewriting Coral IR expressions to produce
 semantically equivalent, but more performant expressions. For example, Coral automates
@@ -39,6 +40,8 @@ Coral can be used as a library in other projects, or as a service. See instructi
 - Coral-Hive: Converts HiveQL to Coral IR (can be typically used with Spark SQL as well).
 - Coral-Trino: Converts Coral IR to Trino SQL. Converting Trino SQL to Coral IR is WIP.
 - Coral-Spark: Converts Coral IR to Spark SQL (can be typically used with HiveQL as well).
+- **Coral-GaussDB**: Converts GaussDB / openGauss SQL to Coral IR. PostgreSQL-compatible frontend with its own ANTLR4 grammar, PG `::` cast, `||` concat, `NVL/NVL2`, `DECODE`, `CONNECT BY`, window functions, and ~30 function mappings. See [coral-gaussdb](coral-gaussdb).
+- **Coral-GaussDB-Spark**: End-to-end GaussDB → Spark SQL translator. Wraps `coral-gaussdb` (frontend) and `coral-spark` (backend) into a one-liner. See [coral-gaussdb-spark](coral-gaussdb-spark).
 - Coral-Dbt: Integrates Coral with DBT. It enables applying Coral transformations on DBT models.
 - Coral-Incremental: Derives an incremental query from input SQL for incremental view maintenance.
 - Coral-Schema: Derives Avro schema of view using view logical plan and input Avro schemas of base tables.
@@ -59,6 +62,63 @@ A major version upgrade represents a version change that introduces backward inc
 A minor version upgrade represents a version change that introduces backward incompatibility by removal or renaming of methods.
 
 Please carefully review the release notes and documentation accompanying each version upgrade to understand the specific changes and the recommended steps for migration.
+
+
+## GaussDB / openGauss Support
+
+This fork extends Coral with first-class support for **GaussDB / openGauss SQL** as a new frontend dialect. Two modules work together to deliver end-to-end translation to Spark SQL:
+
+- [`coral-gaussdb`](coral-gaussdb) — GaussDB SQL → Coral RelNode IR. Own ANTLR4 grammar, own `ParseTreeBuilder`, reuses `HiveSqlValidator` and `DaliOperatorTable` from upstream Coral.
+- [`coral-gaussdb-spark`](coral-gaussdb-spark) — end-to-end GaussDB SQL → Spark SQL. Wraps the frontend + [`coral-spark`](coral-spark) backend.
+
+### Quick start
+
+```java
+import com.linkedin.coral.gaussdb.spark.CoralGaussDBToSpark;
+import java.util.*;
+
+Map<String, Map<String, List<String>>> catalog = new HashMap<>();
+catalog.put("default", Collections.singletonMap(
+    "employees", Arrays.asList("id|int", "dept_id|int", "name|string", "salary|double")));
+
+String sparkSql = CoralGaussDBToSpark.createLocal(
+    "SELECT dept_id, COUNT(*) FROM employees GROUP BY dept_id HAVING COUNT(*) > 1",
+    catalog
+).getSparkSql();
+```
+
+### Coverage highlights
+
+| Input (GaussDB) | Output (Spark) |
+|---|---|
+| `a \|\| b` | `concat(a, b)` |
+| `x::INT` | `CAST(x AS INT)` |
+| `NVL(a, b)` / `NVL2(a, b, c)` | `COALESCE` / `CASE` expansion |
+| `DECODE(x, k1, v1, ..., d)` | `CASE WHEN ... END` |
+| `STRING_AGG(x, sep)` | `concat_ws(sep, collect_list(x))` |
+| `ARRAY_AGG(x)` | `collect_list(x)` |
+| `REGEXP_SUBSTR(s, p)` | `regexp_extract(s, p, 0)` |
+| `MOD(a, b)` | `a % b` |
+| `START WITH ... CONNECT BY ...` | `WITH RECURSIVE` rewrite |
+
+Full rule / test / state table: [`coral-gaussdb/docs/GRAMMAR_COVERAGE.md`](coral-gaussdb/docs/GRAMMAR_COVERAGE.md).
+
+### Design documents
+
+The GaussDB support was built against four design documents in this repository:
+
+- [`README_GAUSSDB_DEV.md`](README_GAUSSDB_DEV.md) — entry point and documentation index
+- [`QUICK_REFERENCE.md`](QUICK_REFERENCE.md) — file paths, entry points, override checklist, debugging tips
+- [`CORAL_ARCHITECTURE_ANALYSIS.md`](CORAL_ARCHITECTURE_ANALYSIS.md) — Coral's overall design (module layout, base classes, Calcite integration)
+- [`CORAL_GAUSSDB_TEMPLATE.md`](CORAL_GAUSSDB_TEMPLATE.md) — phase-by-phase implementation template with code stubs
+- [`GAUSSDB_DESIGN.md`](GAUSSDB_DESIGN.md) — approved design for this fork
+
+### Running tests
+
+```bash
+./gradlew :coral-gaussdb:test           # frontend
+./gradlew :coral-gaussdb-spark:test     # end-to-end
+```
 
 
 ## How to Build
@@ -256,3 +316,4 @@ FROM "db1"."airport"
 3. Trino to Spark  
    Note: During Trino to Spark translations, views referenced in queries are considered to be defined in HiveQL and hence cannot be used when translating a view from Trino. Currently, only referencing base tables is supported in Trino queries. This translation path is currently a POC and may need further improvements.
 4. Spark to Trino
+5. **GaussDB / openGauss to Spark** — provided by [`coral-gaussdb-spark`](coral-gaussdb-spark). Wraps `coral-gaussdb` (frontend) and `coral-spark` (backend). See [coverage](coral-gaussdb/docs/GRAMMAR_COVERAGE.md) for supported grammar and function mappings.
