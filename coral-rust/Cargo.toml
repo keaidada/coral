@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "cli", "ffi"]
+members = ["core", "cli", "ffi", "hive_catalog"]
 
 [workspace.package]
 version = "0.1.0"
@@ -8,6 +8,10 @@ edition = "2021"
 rust-version = "1.75"
 license = "BSD-2-Clause"
 repository = "https://github.com/keaidada/coral"
+homepage = "https://github.com/keaidada/coral/tree/coral-rust"
+authors = ["coral-rust contributors"]
+keywords = ["sql", "gaussdb", "spark", "postgresql", "translator"]
+categories = ["database", "parsing", "parser-implementations"]
 
 [workspace.dependencies]
 sqlparser = { version = "0.52", features = ["visitor"] }

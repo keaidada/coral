@@ -6,12 +6,17 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 
 [[bin]]
 name = "coral"
 path = "src/main.rs"
 
 [dependencies]
-coral-core = { path = "../core" }
+coral-core = { path = "../core", version = "0.1.0" }
 clap = { workspace = true }
 anyhow = { workspace = true }

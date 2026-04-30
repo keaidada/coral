@@ -30,3 +30,14 @@ db/
 # Rust build artifacts (coral-rust/)
 target/
 **/*.rs.bk
+
+# cargo-fuzz artifacts (keep fuzz/Cargo.toml + fuzz/fuzz_targets + corpus)
+coral-rust/fuzz/target/
+coral-rust/fuzz/artifacts/
+coral-rust/fuzz/coverage/
+
+# Python wheel staging (populated by coral-rust/python/build.py from target/)
+coral-rust/python/src/coral_sql/_lib/
+coral-rust/python/build/
+coral-rust/python/dist/
+coral-rust/python/*.egg-info/

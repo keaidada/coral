@@ -1,0 +1,60 @@
+# Copyright 2026 coral-rust contributors
+# Licensed under the BSD-2-Clause license.
+#
+# PEP 518/621 build config. We use setuptools as the build backend because
+# our wheel is mostly pre-compiled C ABI + a thin Python wrapper; PyO3-style
+# tooling (maturin) is overkill here.
+#
+# The Rust cdylib MUST be built separately before `pip install` or `python
+# -m build --wheel`: run `cargo build -p coral-ffi --release` in the
+# coral-rust workspace. The build hook copies the resulting library into
+# src/coral_sql/_lib/ so it ships inside the wheel.
+
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coral-sql"
+version = "0.1.0"
+description = "GaussDB / openGauss SQL to Spark SQL translator (pure Python ctypes wrapper around Rust cdylib)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "BSD-2-Clause" }
+authors = [{ name = "coral-rust contributors" }]
+keywords = ["sql", "gaussdb", "spark", "postgresql", "translator"]
+classifiers = [
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/keaidada/coral/tree/coral-rust/coral-rust"
+Repository = "https://github.com/keaidada/coral"
+Issues = "https://github.com/keaidada/coral/issues"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Ship the compiled cdylib alongside the Python source. The .so/.dylib/.dll
+# file is populated by build.py (run via `python -m build` or the CI
+# workflow). If it's missing at build time the wheel will still be created —
+# it just won't work at runtime; users get a clear FileNotFoundError.
+[tool.setuptools.package-data]
+coral_sql = ["_lib/*"]
+
+# We force the wheel to be platform-specific because it bundles a native
+# library. Without this tag, `pip` would try to install the x86_64 wheel
+# onto an aarch64 Mac and segfault at import.
+[tool.setuptools.dynamic]
+# no dynamic fields currently

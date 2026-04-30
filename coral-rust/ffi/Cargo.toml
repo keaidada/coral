@@ -6,6 +6,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
 
 [lib]
 name = "coral_ffi"
@@ -15,4 +20,4 @@ name = "coral_ffi"
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
-coral-core = { path = "../core" }
+coral-core = { path = "../core", version = "0.1.0" }
