@@ -1,0 +1,18 @@
+[package]
+name = "coral-ffi"
+description = "C ABI for coral-core — call the GaussDB -> Spark SQL translator from Python, Go, Node, C, etc."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "coral_ffi"
+# `cdylib` produces a .so / .dylib / .dll for Python ctypes, Node FFI, Go cgo.
+# `staticlib` produces a .a for direct C linking.
+# `rlib` keeps `cargo test` working for the in-crate tests.
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+coral-core = { path = "../core" }

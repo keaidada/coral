@@ -2,84 +2,128 @@
 
 > 🌐 Languages: **English** | [简体中文](README.zh-CN.md)
 
-Rust port of [`coral-gaussdb`](../coral-gaussdb) + [`coral-gaussdb-spark`](../coral-gaussdb-spark) — a GaussDB / openGauss SQL → Spark SQL translator. No JVM, single native binary, ~5ms per run.
+Rust port of [`coral-gaussdb`](../coral-gaussdb) + [`coral-gaussdb-spark`](../coral-gaussdb-spark) — a GaussDB / openGauss SQL → Spark SQL translator. No JVM, single native binary, ~6 ms per run. Library, CLI, and C FFI bindings (Python / Go / Node ready).
 
-## Status: POC ✅
+## Status: Production-adjacent POC
 
-Proof-of-concept that covers the same 6 representative samples as the Java tree's `SmokeDemo`. 15 tests green. This is intentionally *not* a full port of Coral — see **Scope** below.
+110 tests green. Feature-complete across 5 stages:
+
+- **Stage 1** — full GaussDB function registry (30 rules, including PG date-format-token translation)
+- **Stage 2** — type-mapping layer (JSONB / UUID / BYTEA / TIMESTAMPTZ / Int2-4-8, Float4-8, SERIAL family)
+- **Stage 3** — Oracle `(+)` outer joins, window frames, CONNECT BY
+- **Stage 4** — optional catalog layer with typo-detection + "did you mean?" suggestions
+- **Stage 5** — C FFI with Python + C example bindings
 
 ## Why Rust
 
-The Java `coral-gaussdb-spark` runs on top of Apache Calcite (18 MB shaded JAR, needs JVM, 1+ second cold start). For pipelines that only need **text → text** SQL translation (no query execution, no catalog lookup, no type coercion against real schemas), Calcite is overkill.
+The Java `coral-gaussdb-spark` runs on Apache Calcite (18 MB shaded JAR, needs JVM, ~1.3 s cold start). For pipelines that only need **text → text** SQL translation (no query execution, no catalog lookup against real schemas, no runtime type coercion), Calcite is overkill.
 
 | Metric | Java `:coral-gaussdb-spark:smoke` | Rust `coral --smoke` |
 |---|---|---|
-| Cold start (6 samples) | ~1,266 ms | **~6 ms** |
+| Cold start (6 samples) | ~1,266 ms | **~6 ms** (~200× faster) |
 | Dependencies | JVM + 15+ JARs (~50 MB) | 1 binary (~2 MB) |
 | Deploy | `java -jar ...` | `./coral` |
+| Call from Python/Go/Node | Gradle-built JAR + Py4J / JPype | `ctypes` / `cgo` / `ffi-napi` + .so |
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ 1. Text pre-processing (preprocess.rs)                      │
-│    Rewrites Oracle-style START WITH / CONNECT BY into       │
-│    standard WITH RECURSIVE — sqlparser-rs does not parse    │
-│    Oracle hierarchical queries directly.                    │
-├─────────────────────────────────────────────────────────────┤
-│ 2. Parse (sqlparser-rs, PostgreSqlDialect)                  │
-│    GaussDB is PostgreSQL-compatible, so PG parsing works    │
-│    for the constructs coral-gaussdb handles.                │
-├─────────────────────────────────────────────────────────────┤
-│ 3. AST rewrite passes (rewrite/)                            │
-│    - structure::DistinctOnRewriter                          │
-│        DISTINCT ON (k) -> ROW_NUMBER() OVER subquery        │
-│    - functions::FunctionRewriter                            │
-│        NVL/NVL2/DECODE/SUBSTR/MOD/SYSDATE/RANDOM,           │
-│        PG regex operators ~ ~* !~ !~*, :: cast              │
-├─────────────────────────────────────────────────────────────┤
-│ 4. Render (sqlparser-rs Display trait)                      │
-│    Each AST node Display-formats itself as Spark-compatible │
-│    SQL. No separate "Spark unparser" needed.                │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│ 1. Text preprocessing — preprocess/                              │
+│    Oracle START WITH / CONNECT BY     -> WITH RECURSIVE          │
+│    Oracle `(+)` outer-join markers    -> LEFT JOIN ON            │
+│    (sqlparser-rs cannot parse either of these natively)          │
+├──────────────────────────────────────────────────────────────────┤
+│ 2. Parse — sqlparser-rs PostgreSqlDialect                        │
+│    GaussDB is PG-compatible; PG dialect covers the vast majority │
+├──────────────────────────────────────────────────────────────────┤
+│ 3. (Optional) Catalog validation — catalog::validate_against     │
+│    UnknownTable / UnknownColumn warnings, Levenshtein "did you   │
+│    mean?" suggestions, CTE-aware scoping                         │
+├──────────────────────────────────────────────────────────────────┤
+│ 4. AST rewrite passes — rewrite/                                 │
+│    structure::DistinctOnRewriter    DISTINCT ON (k) -> ROW_NUMBER│
+│    functions::FunctionRewriter      30 function/operator rules   │
+│    types::TypeRewriter              GaussDB types -> Spark types │
+├──────────────────────────────────────────────────────────────────┤
+│ 5. Render — sqlparser-rs Display                                 │
+│    AST nodes self-format as Spark-compatible SQL; no separate    │
+│    "Spark unparser" needed                                       │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-## Coverage vs Coral Java
+## Function coverage
 
-| Sample (from SmokeDemo) | Java coral-gaussdb-spark | coral-rust |
-|---|---|---|
-| CTE + JOIN + window + NVL + `\|\|` | ✅ | ✅ `NVL → COALESCE` |
-| `::INT` / DECODE / SUBSTR / MOD | ✅ | ✅ all 4 rewritten |
-| `~*` / `~` regex operators | ✅ | ✅ `LOWER(x) RLIKE LOWER(p)` / `x RLIKE p` |
-| MERGE INTO | ✅ | ✅ pass-through (syntax-compatible) |
-| CONNECT BY recursive | ✅ | ✅ text preprocessor → WITH RECURSIVE |
-| DISTINCT ON (k) | ✅ | ✅ ROW_NUMBER() subquery |
+```
+Aggregate/window:  COUNT, SUM, AVG, MIN, MAX (pass-through)
+                   ROW_NUMBER, RANK, DENSE_RANK (pass-through)
+                   BOOL_AND/BOOL_OR        -> EVERY/SOME
+                   ARRAY_AGG               -> COLLECT_LIST
+                   STRING_AGG(x, sep)      -> CONCAT_WS(sep, COLLECT_LIST(x))
 
-## Scope
+Null handling:     COALESCE (pass-through)
+                   NVL                     -> COALESCE
+                   NVL2(a, b, c)           -> CASE WHEN a IS NOT NULL THEN b ELSE c END
+                   DECODE(x, k1, v1, ...)  -> CASE WHEN x = k1 THEN v1 ... END
 
-**This POC deliberately handles only translation.** It does NOT replace Coral's:
+String/regex:      SUBSTR                  -> SUBSTRING
+                   POSITION(a, b)          -> INSTR(b, a)
+                   REGEXP_SUBSTR(s, p, …)  -> REGEXP_EXTRACT(s, p, 0)
+                   x ~ p                   -> x RLIKE p
+                   x ~* p                  -> LOWER(x) RLIKE LOWER(p)
+                   x !~ p, x !~* p         -> NOT of above
 
-- Catalog resolution (schema lookup against Hive Metastore) — coral-rust is pure text → text
-- Type coercion across calls (Calcite's rich type system)
-- UDF registry (StaticHiveFunctionRegistry's 100+ function mappings)
-- `coral-hive`, `coral-trino`, `coral-spark`, `coral-incremental`, `coral-schema`, etc.
+Math:              MOD(a, b)               -> a % b
+                   RANDOM                  -> RAND
 
-If you need any of the above, use the Java tree. If you just want to translate GaussDB SQL strings into Spark SQL strings in a native binary, this is the right tool.
+Date/time:         SYSDATE, NOW            -> CURRENT_TIMESTAMP
+                   TRUNC(d, 'MM')          -> DATE_TRUNC('MM', d)  (date form)
+                   TO_CHAR(d, 'YYYY-MM')   -> DATE_FORMAT(d, 'yyyy-MM')
+                   TO_DATE(s, 'YYYY-MM')   -> TO_DATE(s, 'yyyy-MM') (format translated)
+                   TO_TIMESTAMP            -> same (format translated)
+                   Date tokens: YYYY, YY, MON, MM, MI, DD, DY, HH24/HH12/HH,
+                                SS, AM/PM, FF<n> all translated to Spark equivalents
+
+Arrays/series:     GENERATE_SERIES(a, b)   -> SEQUENCE(a, b)
+```
+
+## Type coverage
+
+```
+JSON, JSONB, REGCLASS, TEXT              -> STRING
+UUID                                     -> STRING
+BYTEA                                    -> BINARY
+TIMESTAMP WITH TIME ZONE / TIMESTAMPTZ   -> TIMESTAMP (drops timezone suffix)
+INT2/INT4/INT8                           -> SMALLINT/INT/BIGINT
+FLOAT4/FLOAT8                            -> REAL/DOUBLE
+SMALLSERIAL/SERIAL/BIGSERIAL             -> SMALLINT/INT/BIGINT
+INTERVAL, DATE, TIMESTAMP, DECIMAL, …    pass through
+```
+
+## Structural rewrites
+
+| Input                                                  | Output                                                    |
+|--------------------------------------------------------|-----------------------------------------------------------|
+| `SELECT DISTINCT ON (k) ... ORDER BY ...`              | `SELECT ... FROM (SELECT ..., ROW_NUMBER() OVER (...) AS rn) WHERE rn = 1` |
+| `SELECT ... START WITH ... CONNECT BY PRIOR id = pid`  | `WITH RECURSIVE __coral_connect_by AS (...) SELECT ...`    |
+| `FROM a, b WHERE a.id = b.id(+)`                       | `FROM a LEFT JOIN b ON a.id = b.id`                       |
 
 ## Usage
 
 ### CLI
 
 ```bash
+cargo build --release -p coral-cli
+
 # From stdin:
-echo "SELECT NVL(x, 0), y::INT FROM t" | coral
+echo "SELECT NVL(x, 0), y::INT FROM t" | ./target/release/coral
 # → SELECT COALESCE(x, 0), CAST(y AS INT) FROM t
 
 # From a file:
-coral --file query.sql
+./target/release/coral --file query.sql
 
 # Built-in demo (same 6 samples as :coral-gaussdb-spark:smoke):
-coral --smoke
+./target/release/coral --smoke
 ```
 
 ### Library
@@ -90,40 +134,77 @@ coral-core = { path = "path/to/coral-rust/core" }
 ```
 
 ```rust
+// Plain translation
 let spark_sql = coral_core::translate("SELECT DECODE(x, 1, 'a', 'b') FROM t")?;
 // "SELECT CASE WHEN x = 1 THEN 'a' ELSE 'b' END FROM t"
+
+// Catalog-aware
+use coral_core::{InMemoryCatalog, translate_with_catalog};
+
+let cat = InMemoryCatalog::from_pairs(&[
+    ("default", "employees", &["id|int", "name|string", "dept_id|int"]),
+]);
+let r = translate_with_catalog("SELECT e.dpt_id FROM default.employees e", &cat)?;
+// r.issues[0] -> UnknownColumn { column: "dpt_id", did_you_mean: Some("dept_id") }
+// r.spark_sql -> translated SQL (returned regardless)
+```
+
+### Python
+
+```bash
+cargo build --release -p coral-ffi
+python3 ffi/examples/python/smoke_demo.py
+```
+
+```python
+from coral import translate, CoralError
+
+try:
+    spark_sql = translate("SELECT NVL(x, 0), y::INT FROM t")
+    print(spark_sql)
+except CoralError as e:
+    print("translation failed:", e)
+```
+
+No PyO3. No build step. Just `ctypes` on the stdlib, loading `libcoral_ffi.dylib/.so/.dll`.
+
+### C / C++
+
+```bash
+cargo build --release -p coral-ffi
+
+cc ffi/examples/c/smoke.c -o smoke \
+   -I ffi/include -L target/release -lcoral_ffi \
+   -Wl,-rpath,'$ORIGIN/target/release'
+./smoke
+```
+
+Header in `ffi/include/coral.h`; 4 functions total:
+```c
+char       *coral_translate(const char *input);    // returns owned, or NULL
+void        coral_free_string(char *ptr);
+const char *coral_last_error(void);                // thread-local, borrowed
+const char *coral_version(void);                   // static, borrowed
 ```
 
 ## Build and test
 
 ```bash
 cd coral-rust
-cargo build --release        # target/release/coral
-cargo test                   # 15 tests: 3 unit + 12 integration
+cargo build --release
+cargo test                       # 110 tests across 4 crates
 cargo run --bin coral -- --smoke
 ```
 
-## Extending
+## Not covered (yet)
 
-Adding a new function mapping is ~5 lines in `core/src/rewrite/functions.rs`:
+This POC handles translation. It does NOT replace Coral's:
 
-```rust
-"to_char" => {
-    // Forward TO_CHAR(x, 'YYYY') to DATE_FORMAT(x, 'yyyy') with format translation
-    // ...
-}
-```
+- Hive Metastore remote catalog (the trait is here, only the in-memory impl ships)
+- Runtime UDF registry with Hive semantics (StaticHiveFunctionRegistry's 100+ rules)
+- `coral-hive`, `coral-trino`, `coral-spark`, `coral-incremental`, `coral-schema`
 
-Adding a new structural rewrite follows `DistinctOnRewriter` as a template: implement `VisitorMut`, override `post_visit_query`, rewire the `Query` node.
-
-For CONNECT BY and other constructs sqlparser-rs cannot parse, extend `core/src/preprocess.rs` with a text-level transform.
-
-## Limitations
-
-- **MERGE INTO** pass-through assumes target table supports Spark MERGE (Delta / Iceberg / Hudi). Plain Hive tables will fail at execution time — this is a Spark limitation, not a translation issue.
-- **Window frame clauses** (`ROWS BETWEEN ... AND ...`) are parsed but untested; they round-trip via `Display` which may or may not match the Coral Java output exactly.
-- **CONNECT BY preprocessor** handles the canonical shape only (bare table in FROM, simple PRIOR equality). Complex cases fall through the parser and produce a clear parse error rather than silent wrong output.
-- **Type system**: GaussDB `JSONB`, `UUID`, `INTERVAL` reach the output verbatim; Spark will complain if it does not understand them. A type-mapping layer is future work.
+If you need any of the above, use the Java tree. If you just want to translate GaussDB SQL strings into Spark SQL strings from Rust / Python / Go / Node / C, this is the right tool.
 
 ## License
 
