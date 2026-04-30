@@ -235,6 +235,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "coral-e2e"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "coral-core",
+ "coral-incremental",
+ "coral-pig",
+ "coral-schema",
+ "coral-service",
+ "coral-spark",
+ "coral-trino",
+ "coral-viz",
+ "serde_json",
+ "tokio",
+ "tower 0.4.13",
+]
+
+[[package]]
 name = "coral-ffi"
 version = "0.1.0"
 dependencies = [

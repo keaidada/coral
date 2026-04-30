@@ -1,0 +1,35 @@
+[package]
+name = "coral-e2e"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+description = "Cross-crate integration tests for the coral-rust workspace."
+publish = false
+
+[lib]
+name = "coral_e2e"
+path = "src/lib.rs"
+
+[dependencies]
+coral-core = { path = "../core" }
+
+[dev-dependencies]
+coral-core = { path = "../core" }
+coral-trino = { path = "../trino" }
+coral-service = { path = "../service" }
+coral-schema = { path = "../schema" }
+coral-spark = { path = "../spark" }
+coral-viz = { path = "../viz" }
+coral-incremental = { path = "../incremental" }
+coral-pig = { path = "../pig" }
+axum = { version = "0.7", default-features = false, features = ["json", "tokio", "http1"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tower = { version = "0.4", features = ["util"] }
+serde_json = "1"

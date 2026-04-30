@@ -2,17 +2,54 @@
 
 > 🌐 Languages: **English** | [简体中文](README.zh-CN.md)
 
-Rust port of [`coral-gaussdb`](../coral-gaussdb) + [`coral-gaussdb-spark`](../coral-gaussdb-spark) — a GaussDB / openGauss SQL → Spark SQL translator. No JVM, single native binary, ~6 ms per run. Library, CLI, and C FFI bindings (Python / Go / Node ready).
+Rust port of **the full LinkedIn Coral stack** (not just `coral-gaussdb`). Twelve crates in one workspace cover the GaussDB/Hive → Spark/Trino/Pig translation surface, plus Avro schema inference, HTTP service, AST visualizer, incremental-materialized-view rewriter, and cross-platform FFI. No JVM, single native binary, ~6 ms per run.
 
-## Status: Production-adjacent POC
+## Status: Java-parity coverage
 
-110 tests green. Feature-complete across 5 stages:
+245 tests green across 12 crates. Stages G–O complete the remaining Java-Coral modules:
 
+### Stages 1–5 (original GaussDB → Spark core)
 - **Stage 1** — full GaussDB function registry (30 rules, including PG date-format-token translation)
 - **Stage 2** — type-mapping layer (JSONB / UUID / BYTEA / TIMESTAMPTZ / Int2-4-8, Float4-8, SERIAL family)
 - **Stage 3** — Oracle `(+)` outer joins, window frames, CONNECT BY
 - **Stage 4** — optional catalog layer with typo-detection + "did you mean?" suggestions
 - **Stage 5** — C FFI with Python + C example bindings
+
+### Stages A–F (infra + full StaticHiveFunctionRegistry)
+- **Stage A** — GitHub Actions CI (template under `ci/`)
+- **Stage B** — crates.io + PyPI wheel packaging
+- **Stage C** — real Hive Metastore HTTP catalog (`coral-hive-catalog`)
+- **Stage D** — 198-entry function registry (registry-driven rewriter)
+- **Stage E** — cargo-fuzz + stable-Rust property tests
+- **Stage F** — commit pipeline consolidation
+
+### Stages G–O (full Java-Coral parity)
+- **Stage G** — Trino output backend (`coral-trino`, port of `coral-trino`)
+- **Stage H** — HTTP service (`coral-service`, axum, port of `coral-service`)
+- **Stage I** — function registry expanded to **331 entries** (≥302 Hive-parity target)
+- **Stage J** — Avro schema inference (`coral-schema`, port of `coral-schema`)
+- **Stage K** — Spark catalog/plan helpers (`coral-spark`, ports of `coral-spark-catalog` + `coral-spark-plan`)
+- **Stage L** — AST visualization DOT/PlantUML (`coral-viz`, port of `coral-visualization`)
+- **Stage M** — Incremental materialized views (`coral-incremental`, port of `coral-incremental`)
+- **Stage N** — Pig Latin output (`coral-pig`, port of `coral-pig`)
+- **Stage O** — cross-crate e2e tests + tagged release
+
+### Workspace layout
+
+| Crate | Maps to Java module |
+|---|---|
+| `core/` | `coral-gaussdb` + `coral-hive` translation core |
+| `trino/` | `coral-trino` |
+| `spark/` | `coral-spark-catalog` (partial) + `coral-spark-plan` (full) |
+| `schema/` | `coral-schema` |
+| `viz/` | `coral-visualization` |
+| `incremental/` | `coral-incremental` |
+| `pig/` | `coral-pig` |
+| `service/` | `coral-service` |
+| `hive_catalog/` | `coral-common` (HMS client subset) |
+| `cli/` | — (new) |
+| `ffi/` | — (new, C ABI + Python ctypes) |
+| `e2e/` | — (new, cross-crate integration tests) |
 
 ## Why Rust
 
