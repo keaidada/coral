@@ -1,0 +1,21 @@
+[package]
+name = "coral-pig"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+description = "Pig Latin output backend for coral-rust (Rust port of coral-pig)."
+
+[lib]
+name = "coral_pig"
+path = "src/lib.rs"
+
+[dependencies]
+sqlparser = { workspace = true }
+thiserror = { workspace = true }
