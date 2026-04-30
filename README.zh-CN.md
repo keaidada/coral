@@ -4,6 +4,8 @@
 
 当前分支是 Rust 优先的 Coral 工作区。旧的 Java / Gradle 后台已经移除；当前主后端是 `coral-rust/`，Web UI 是 `coral-service/frontend/`。
 
+完整架构设计说明见：[`docs/architecture.zh-CN.md`](docs/architecture.zh-CN.md)。
+
 ## 目录结构
 
 | 路径 | 说明 |
