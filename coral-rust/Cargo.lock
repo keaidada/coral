@@ -283,6 +283,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "coral-spark"
+version = "0.1.0"
+dependencies = [
+ "coral-core",
+ "coral-schema",
+ "sqlparser",
+ "thiserror",
+]
+
+[[package]]
 name = "coral-trino"
 version = "0.1.0"
 dependencies = [

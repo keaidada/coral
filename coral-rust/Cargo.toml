@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "cli", "ffi", "hive_catalog", "trino", "service", "schema"]
+members = ["core", "cli", "ffi", "hive_catalog", "trino", "service", "schema", "spark"]
 
 [workspace.package]
 version = "0.1.0"
