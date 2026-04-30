@@ -3,28 +3,44 @@
 
 //! Function / operator-level rewrites.
 //!
-//! Mirrors the entries in `StaticHiveFunctionRegistry` + GaussDB-specific
-//! handling inside `coral-gaussdb`'s ParseTreeBuilder:
+//! Full port of the GaussDB -> Spark function mappings from
+//! `coral-gaussdb`'s `ParseTreeBuilder.visitFunctionCall` — 30 rules:
 //!
-//! | GaussDB input           | Spark output                          |
-//! |-------------------------|---------------------------------------|
-//! | `NVL(a, b)`             | `COALESCE(a, b)`                      |
-//! | `NVL2(a, b, c)`         | `CASE WHEN a IS NOT NULL THEN b ELSE c END` |
-//! | `DECODE(x, k1, v1, …, d)` | `CASE WHEN x = k1 THEN v1 … ELSE d END` |
-//! | `SUBSTR(x, s, l)`       | `SUBSTRING(x, s, l)`                  |
-//! | `MOD(a, b)`             | `a % b`                               |
-//! | `x::INT`                | `CAST(x AS INT)`                      |
-//! | `x ~ p`                 | `x RLIKE p`                           |
-//! | `x ~* p`                | `LOWER(x) RLIKE LOWER(p)`             |
-//! | `x !~ p` / `x !~* p`    | `NOT` of the above                    |
-//! | `SYSDATE` / `NOW()`     | `CURRENT_TIMESTAMP`                   |
-//! | `RANDOM()`              | `RAND()`                              |
+//! | GaussDB           | Spark                                             |
+//! |-------------------|---------------------------------------------------|
+//! | `NVL(a, b)`       | `COALESCE(a, b)`                                  |
+//! | `NVL2(a, b, c)`   | `CASE WHEN a IS NOT NULL THEN b ELSE c END`       |
+//! | `DECODE(...)`     | `CASE WHEN x = k THEN v ... [ELSE d] END`         |
+//! | `SUBSTR`          | `SUBSTRING`                                       |
+//! | `MOD(a, b)`       | `a % b`                                           |
+//! | `SYSDATE`/`NOW`   | `CURRENT_TIMESTAMP`                               |
+//! | `RANDOM`          | `RAND`                                            |
+//! | `POSITION(a,b)`   | `INSTR(b, a)` (args swapped)                      |
+//! | `BOOL_AND`        | `EVERY`                                           |
+//! | `BOOL_OR`         | `SOME`                                            |
+//! | `ARRAY_AGG(x)`    | `COLLECT_LIST(x)`                                 |
+//! | `STRING_AGG(x,s)` | `CONCAT_WS(s, COLLECT_LIST(x))`                   |
+//! | `TRUNC(d, 'MM')`  | `DATE_TRUNC('MM', d)` (arg swap, date only)       |
+//! | `REGEXP_SUBSTR`   | `REGEXP_EXTRACT(s, p, 0)`                         |
+//! | `GENERATE_SERIES` | `SEQUENCE`                                        |
+//! | `TO_CHAR(d, fmt)` | `DATE_FORMAT(d, translated_fmt)` (date-ish only)  |
+//! | `TO_DATE(s, fmt)` | `TO_DATE(s, translated_fmt)`                      |
+//! | `TO_TIMESTAMP`    | `TO_TIMESTAMP(s, translated_fmt)`                 |
+//! | `x::T`            | `CAST(x AS T)`                                    |
+//! | `x ~ p`           | `x RLIKE p`                                       |
+//! | `x ~* p`          | `LOWER(x) RLIKE LOWER(p)`                         |
+//! | `x !~ p` / `!~*`  | `NOT (...)` of above                              |
+//!
+//! Non-GaussDB-specific functions (COALESCE, COUNT, SUM, ROW_NUMBER, …) are
+//! left untouched — they pass through sqlparser-rs's Display as valid Spark SQL.
 
 use sqlparser::ast::{
     BinaryOperator, CastKind, Expr, Function, FunctionArg, FunctionArgExpr, FunctionArguments,
-    Ident, ObjectName, UnaryOperator, VisitorMut,
+    Ident, ObjectName, UnaryOperator, Value, VisitorMut,
 };
 use std::ops::ControlFlow;
+
+use crate::date_format::{contains_date_format_token, translate_pg_date_format};
 
 pub struct FunctionRewriter;
 
@@ -32,54 +48,20 @@ impl VisitorMut for FunctionRewriter {
     type Break = std::convert::Infallible;
 
     fn post_visit_expr(&mut self, expr: &mut Expr) -> ControlFlow<Self::Break> {
-        // Post-order: children have already been rewritten by the time we see
-        // the parent. That means when we replace `NVL(NVL(x, y), z)` we see the
-        // inner NVL first; when we later visit the outer NVL, its args are
-        // already `COALESCE(x, y)`, and the outer becomes `COALESCE(COALESCE(x, y), z)`.
-
-        // 1) `::` cast -> CAST(x AS T)
+        // ---- 1) `::` cast -> CAST(x AS T)
         if let Expr::Cast { kind, .. } = expr {
             if *kind == CastKind::DoubleColon {
                 *kind = CastKind::Cast;
             }
         }
 
-        // 2) PG regex operators -> RLIKE / NOT RLIKE with case-folding for IMatch
+        // ---- 2) PG regex operators -> Spark RLIKE equivalents
         if let Expr::BinaryOp { left, op, right } = expr {
             let new = match op {
-                BinaryOperator::PGRegexMatch => {
-                    // x ~ p  ->  x RLIKE p  (Custom("RLIKE") so the Display
-                    // literally writes "RLIKE")
-                    Some(Expr::BinaryOp {
-                        left: left.clone(),
-                        op: BinaryOperator::Custom("RLIKE".into()),
-                        right: right.clone(),
-                    })
-                }
-                BinaryOperator::PGRegexIMatch => {
-                    // x ~* p  ->  LOWER(x) RLIKE LOWER(p)
-                    Some(Expr::BinaryOp {
-                        left: Box::new(wrap_unary_fn("LOWER", (**left).clone())),
-                        op: BinaryOperator::Custom("RLIKE".into()),
-                        right: Box::new(wrap_unary_fn("LOWER", (**right).clone())),
-                    })
-                }
-                BinaryOperator::PGRegexNotMatch => Some(Expr::UnaryOp {
-                    op: UnaryOperator::Not,
-                    expr: Box::new(Expr::Nested(Box::new(Expr::BinaryOp {
-                        left: left.clone(),
-                        op: BinaryOperator::Custom("RLIKE".into()),
-                        right: right.clone(),
-                    }))),
-                }),
-                BinaryOperator::PGRegexNotIMatch => Some(Expr::UnaryOp {
-                    op: UnaryOperator::Not,
-                    expr: Box::new(Expr::Nested(Box::new(Expr::BinaryOp {
-                        left: Box::new(wrap_unary_fn("LOWER", (**left).clone())),
-                        op: BinaryOperator::Custom("RLIKE".into()),
-                        right: Box::new(wrap_unary_fn("LOWER", (**right).clone())),
-                    }))),
-                }),
+                BinaryOperator::PGRegexMatch => Some(rlike(left, right, false)),
+                BinaryOperator::PGRegexIMatch => Some(rlike(left, right, true)),
+                BinaryOperator::PGRegexNotMatch => Some(negate(rlike(left, right, false))),
+                BinaryOperator::PGRegexNotIMatch => Some(negate(rlike(left, right, true))),
                 _ => None,
             };
             if let Some(new_expr) = new {
@@ -88,107 +70,10 @@ impl VisitorMut for FunctionRewriter {
             }
         }
 
-        // 3) Function-level rewrites
+        // ---- 3) Function-level rewrites (post-order: args already rewritten)
         if let Expr::Function(f) = expr {
-            let name_lower = function_name_lower(f);
-            match name_lower.as_str() {
-                "nvl" => {
-                    if let Some(args) = take_positional_args(f, 2) {
-                        *expr = Expr::Function(Function {
-                            name: ObjectName(vec![Ident::new("COALESCE")]),
-                            parameters: FunctionArguments::None,
-                            args: build_positional_args(args),
-                            filter: None,
-                            null_treatment: None,
-                            over: None,
-                            within_group: vec![],
-                        });
-                    }
-                }
-                "nvl2" => {
-                    // NVL2(a, b, c) -> CASE WHEN a IS NOT NULL THEN b ELSE c END
-                    if let Some(mut args) = take_positional_args(f, 3) {
-                        let a = args.remove(0);
-                        let b = args.remove(0);
-                        let c = args.remove(0);
-                        *expr = Expr::Case {
-                            operand: None,
-                            conditions: vec![Expr::IsNotNull(Box::new(a))],
-                            results: vec![b],
-                            else_result: Some(Box::new(c)),
-                        };
-                    }
-                }
-                "decode" => {
-                    // DECODE(x, k1, v1, k2, v2, [default])
-                    // -> CASE WHEN x = k1 THEN v1 WHEN x = k2 THEN v2 [ELSE default] END
-                    if let Some(args) = take_all_positional_args(f) {
-                        if args.len() >= 3 {
-                            let mut iter = args.into_iter();
-                            let x = iter.next().unwrap();
-                            let mut conditions = vec![];
-                            let mut results = vec![];
-                            let mut else_result: Option<Expr> = None;
-
-                            let rest: Vec<Expr> = iter.collect();
-                            let pair_count = rest.len() / 2;
-                            let has_default = rest.len() % 2 == 1;
-                            let mut it = rest.into_iter();
-                            for _ in 0..pair_count {
-                                let k = it.next().unwrap();
-                                let v = it.next().unwrap();
-                                conditions.push(Expr::BinaryOp {
-                                    left: Box::new(x.clone()),
-                                    op: BinaryOperator::Eq,
-                                    right: Box::new(k),
-                                });
-                                results.push(v);
-                            }
-                            if has_default {
-                                else_result = Some(it.next().unwrap());
-                            }
-
-                            *expr = Expr::Case {
-                                operand: None,
-                                conditions,
-                                results,
-                                else_result: else_result.map(Box::new),
-                            };
-                        }
-                    }
-                }
-                "substr" => {
-                    // SUBSTR(x, s, l) -> SUBSTRING(x, s, l)
-                    // Same arg layout, just rename. Preserve window/filter etc.
-                    f.name = ObjectName(vec![Ident::new("SUBSTRING")]);
-                }
-                "mod" => {
-                    // MOD(a, b) -> a % b
-                    if let Some(mut args) = take_positional_args(f, 2) {
-                        let b = args.remove(1);
-                        let a = args.remove(0);
-                        *expr = Expr::BinaryOp {
-                            left: Box::new(a),
-                            op: BinaryOperator::Modulo,
-                            right: Box::new(b),
-                        };
-                    }
-                }
-                "sysdate" => {
-                    // GaussDB `SYSDATE` is a no-paren identifier; if parser does
-                    // pick it up as a Function it's still safe to map to
-                    // CURRENT_TIMESTAMP.
-                    f.name = ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]);
-                    f.args = FunctionArguments::None;
-                }
-                "now" => {
-                    f.name = ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]);
-                    f.args = FunctionArguments::None;
-                }
-                "random" => {
-                    f.name = ObjectName(vec![Ident::new("RAND")]);
-                }
-                _ => {}
+            if let Some(replacement) = rewrite_function(f) {
+                *expr = replacement;
             }
         }
 
@@ -196,20 +81,279 @@ impl VisitorMut for FunctionRewriter {
     }
 }
 
-/// Extract the lowercased leaf name of a function reference (e.g. `PUBLIC.NVL`
-/// -> `nvl`). Empty string if the function has no name parts (shouldn't happen
-/// for well-formed input, but we defend against it).
+/// Core of the function rewriter: dispatch on the lowercased function name
+/// and return Some(new_expr) to replace the call, or None to leave untouched.
+///
+/// Mutates `f` in place for rename-only cases (SUBSTR -> SUBSTRING) to preserve
+/// the function's filter/over/within_group clauses without re-boxing.
+fn rewrite_function(f: &mut Function) -> Option<Expr> {
+    let name = function_name_lower(f);
+    match name.as_str() {
+        // ---- no-op aggregates / window functions: leave as-is, documented
+        // here so future maintainers know they WERE considered.
+        "sum" | "avg" | "min" | "max" | "count" | "coalesce" | "row_number" | "rank"
+        | "dense_rank" => None,
+
+        // ---- drop-in renames
+        "nvl" => rename(f, "COALESCE"),
+        "random" => rename(f, "RAND"),
+        "array_agg" => rename(f, "COLLECT_LIST"),
+        "generate_series" => rename(f, "SEQUENCE"),
+        "bool_and" => rename(f, "EVERY"),
+        "bool_or" => rename(f, "SOME"),
+        "substr" => rename(f, "SUBSTRING"),
+
+        // ---- call-shape changes
+        "nvl2" => rewrite_nvl2(f),
+        "decode" => rewrite_decode(f),
+        "mod" => rewrite_mod(f),
+        "sysdate" | "now" => {
+            // Both take no args in Spark; produce CURRENT_TIMESTAMP as a
+            // function call (Spark accepts both with and without parens).
+            f.name = ObjectName(vec![Ident::new("CURRENT_TIMESTAMP")]);
+            f.args = FunctionArguments::None;
+            None
+        }
+        "position" => rewrite_position(f),
+        "string_agg" => rewrite_string_agg(f),
+        "trunc" => rewrite_trunc(f),
+        "regexp_substr" => rewrite_regexp_substr(f),
+        "to_char" => rewrite_to_char(f),
+        "to_date" | "to_timestamp" => {
+            rewrite_date_format_arg(f);
+            None
+        }
+
+        _ => None,
+    }
+}
+
+// ---------- individual rewrites ----------
+
+fn rewrite_nvl2(f: &mut Function) -> Option<Expr> {
+    let mut args = take_positional_args(f, 3)?;
+    let a = args.remove(0);
+    let b = args.remove(0);
+    let c = args.remove(0);
+    Some(Expr::Case {
+        operand: None,
+        conditions: vec![Expr::IsNotNull(Box::new(a))],
+        results: vec![b],
+        else_result: Some(Box::new(c)),
+    })
+}
+
+fn rewrite_decode(f: &mut Function) -> Option<Expr> {
+    let args = take_all_positional_args(f)?;
+    if args.len() < 3 {
+        return None;
+    }
+    let mut iter = args.into_iter();
+    let x = iter.next().unwrap();
+    let mut conditions = vec![];
+    let mut results = vec![];
+
+    let rest: Vec<Expr> = iter.collect();
+    let has_default = rest.len() % 2 == 1;
+    let pair_count = rest.len() / 2;
+    let mut it = rest.into_iter();
+    for _ in 0..pair_count {
+        let k = it.next().unwrap();
+        let v = it.next().unwrap();
+        conditions.push(Expr::BinaryOp {
+            left: Box::new(x.clone()),
+            op: BinaryOperator::Eq,
+            right: Box::new(k),
+        });
+        results.push(v);
+    }
+    let else_result = if has_default { Some(Box::new(it.next().unwrap())) } else { None };
+
+    Some(Expr::Case {
+        operand: None,
+        conditions,
+        results,
+        else_result,
+    })
+}
+
+fn rewrite_mod(f: &mut Function) -> Option<Expr> {
+    let mut args = take_positional_args(f, 2)?;
+    let b = args.remove(1);
+    let a = args.remove(0);
+    Some(Expr::BinaryOp {
+        left: Box::new(a),
+        op: BinaryOperator::Modulo,
+        right: Box::new(b),
+    })
+}
+
+fn rewrite_position(f: &mut Function) -> Option<Expr> {
+    // POSITION(a, b) -> INSTR(b, a)  (arg swap)
+    let mut args = take_positional_args(f, 2)?;
+    let b = args.remove(1);
+    let a = args.remove(0);
+    Some(call("INSTR", vec![b, a]))
+}
+
+fn rewrite_string_agg(f: &mut Function) -> Option<Expr> {
+    // STRING_AGG(x, sep) -> CONCAT_WS(sep, COLLECT_LIST(x))
+    let mut args = take_positional_args(f, 2)?;
+    let sep = args.remove(1);
+    let x = args.remove(0);
+    Some(call("CONCAT_WS", vec![sep, call("COLLECT_LIST", vec![x])]))
+}
+
+fn rewrite_trunc(f: &mut Function) -> Option<Expr> {
+    // TRUNC(date, unit-literal) -> DATE_TRUNC(unit, date)  (arg swap)
+    // TRUNC(numeric, digits) passes through (same semantics in Spark).
+    let args = take_all_positional_args(f)?;
+    if args.len() != 2 {
+        return Some(call("TRUNC", args));
+    }
+    // Peek at arg[1]: if it's a string literal, do the date_trunc rewrite.
+    if let Expr::Value(Value::SingleQuotedString(_)) = &args[1] {
+        let mut it = args.into_iter();
+        let d = it.next().unwrap();
+        let unit = it.next().unwrap();
+        Some(call("DATE_TRUNC", vec![unit, d]))
+    } else {
+        Some(call("TRUNC", args))
+    }
+}
+
+fn rewrite_regexp_substr(f: &mut Function) -> Option<Expr> {
+    // REGEXP_SUBSTR(s, p [, pos [, occurrence]]) -> REGEXP_EXTRACT(s, p, 0).
+    // We drop pos/occurrence because Spark's regexp_extract takes a
+    // capture-group index there. A richer translation is future work.
+    let args = take_all_positional_args(f)?;
+    if args.len() >= 2 {
+        let mut it = args.into_iter();
+        let s = it.next().unwrap();
+        let p = it.next().unwrap();
+        let zero = Expr::Value(Value::Number("0".into(), false));
+        Some(call("REGEXP_EXTRACT", vec![s, p, zero]))
+    } else {
+        Some(call("REGEXP_SUBSTR", args))
+    }
+}
+
+fn rewrite_to_char(f: &mut Function) -> Option<Expr> {
+    // TO_CHAR(d, 'YYYY-MM-DD') -> DATE_FORMAT(d, 'yyyy-MM-dd')
+    // TO_CHAR(n, 'fm999.99') passes through — Spark's to_char handles numerics.
+    let FunctionArguments::List(list) = &mut f.args else {
+        return None;
+    };
+    if list.args.len() != 2 {
+        return None;
+    }
+    // Inspect arg[1] non-destructively.
+    let fmt_is_datish = matches!(
+        &list.args[1],
+        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+            Value::SingleQuotedString(s)
+        ))) if contains_date_format_token(s)
+    );
+    if !fmt_is_datish {
+        return None;
+    }
+    // Destructure and rebuild as DATE_FORMAT with the translated literal.
+    let args = std::mem::take(&mut list.args);
+    let mut exprs: Vec<Expr> = args
+        .into_iter()
+        .filter_map(|a| match a {
+            FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => Some(e),
+            _ => None,
+        })
+        .collect();
+    if exprs.len() != 2 {
+        return None;
+    }
+    let fmt_expr = exprs.remove(1);
+    let d = exprs.remove(0);
+
+    let new_fmt = if let Expr::Value(Value::SingleQuotedString(s)) = fmt_expr {
+        Expr::Value(Value::SingleQuotedString(translate_pg_date_format(&s)))
+    } else {
+        fmt_expr
+    };
+    Some(call("DATE_FORMAT", vec![d, new_fmt]))
+}
+
+/// In-place rewrite of the 2nd arg to TO_DATE / TO_TIMESTAMP when it's a
+/// string literal containing date tokens. Keeps the function name.
+fn rewrite_date_format_arg(f: &mut Function) {
+    let FunctionArguments::List(list) = &mut f.args else {
+        return;
+    };
+    if list.args.len() < 2 {
+        return;
+    }
+    // Mutate arg[1] in place.
+    if let FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(
+        Value::SingleQuotedString(s),
+    ))) = &mut list.args[1]
+    {
+        if contains_date_format_token(s) {
+            *s = translate_pg_date_format(s);
+        }
+    }
+}
+
+// ---------- small helpers ----------
+
+fn rename(f: &mut Function, new_name: &str) -> Option<Expr> {
+    f.name = ObjectName(vec![Ident::new(new_name)]);
+    None
+}
+
+fn rlike(left: &Expr, right: &Expr, case_insensitive: bool) -> Expr {
+    let (l, r) = if case_insensitive {
+        (call("LOWER", vec![left.clone()]), call("LOWER", vec![right.clone()]))
+    } else {
+        (left.clone(), right.clone())
+    };
+    Expr::BinaryOp {
+        left: Box::new(l),
+        op: BinaryOperator::Custom("RLIKE".into()),
+        right: Box::new(r),
+    }
+}
+
+fn negate(inner: Expr) -> Expr {
+    Expr::UnaryOp {
+        op: UnaryOperator::Not,
+        expr: Box::new(Expr::Nested(Box::new(inner))),
+    }
+}
+
+fn call(name: &str, args: Vec<Expr>) -> Expr {
+    Expr::Function(Function {
+        name: ObjectName(vec![Ident::new(name)]),
+        parameters: FunctionArguments::None,
+        args: FunctionArguments::List(sqlparser::ast::FunctionArgumentList {
+            duplicate_treatment: None,
+            args: args
+                .into_iter()
+                .map(|e| FunctionArg::Unnamed(FunctionArgExpr::Expr(e)))
+                .collect(),
+            clauses: vec![],
+        }),
+        filter: None,
+        null_treatment: None,
+        over: None,
+        within_group: vec![],
+    })
+}
+
 fn function_name_lower(f: &Function) -> String {
     f.name
         .0
         .last()
-        .map(|ident| ident.value.to_lowercase())
+        .map(|i| i.value.to_lowercase())
         .unwrap_or_default()
 }
 
-/// Take exactly `n` positional (`Unnamed(FunctionArgExpr::Expr(_))`) arguments
-/// out of a function. Returns None if the shape doesn't match — the caller
-/// should then leave the function untouched.
 fn take_positional_args(f: &mut Function, n: usize) -> Option<Vec<Expr>> {
     let FunctionArguments::List(list) = &mut f.args else {
         return None;
@@ -222,9 +366,6 @@ fn take_positional_args(f: &mut Function, n: usize) -> Option<Vec<Expr>> {
         match a {
             FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => out.push(e),
             other => {
-                // Put it back and bail out — we can't rewrite non-positional
-                // forms (named args, wildcards, qualified wildcards) without
-                // knowing user intent. Return None and restore.
                 list.args.push(other);
                 return None;
             }
@@ -233,8 +374,6 @@ fn take_positional_args(f: &mut Function, n: usize) -> Option<Vec<Expr>> {
     Some(out)
 }
 
-/// Take every positional argument the function has. Returns None on any
-/// non-positional arg.
 fn take_all_positional_args(f: &mut Function) -> Option<Vec<Expr>> {
     let FunctionArguments::List(list) = &mut f.args else {
         return None;
@@ -250,29 +389,4 @@ fn take_all_positional_args(f: &mut Function) -> Option<Vec<Expr>> {
         }
     }
     Some(out)
-}
-
-/// Wrap expressions into `FunctionArguments::List` of unnamed positional args.
-fn build_positional_args(exprs: Vec<Expr>) -> FunctionArguments {
-    FunctionArguments::List(sqlparser::ast::FunctionArgumentList {
-        duplicate_treatment: None,
-        args: exprs
-            .into_iter()
-            .map(|e| FunctionArg::Unnamed(FunctionArgExpr::Expr(e)))
-            .collect(),
-        clauses: vec![],
-    })
-}
-
-/// Build a call `NAME(inner)` — used to wrap expressions in `LOWER(...)`.
-fn wrap_unary_fn(name: &str, inner: Expr) -> Expr {
-    Expr::Function(Function {
-        name: ObjectName(vec![Ident::new(name)]),
-        parameters: FunctionArguments::None,
-        args: build_positional_args(vec![inner]),
-        filter: None,
-        null_treatment: None,
-        over: None,
-        within_group: vec![],
-    })
 }

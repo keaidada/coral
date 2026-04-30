@@ -12,6 +12,7 @@
 //! translation. Sufficient for the translate-only use case that `CoralGaussDBToSpark`
 //! serves in the Java tree.
 
+pub mod date_format;
 pub mod error;
 pub mod preprocess;
 pub mod rewrite;
